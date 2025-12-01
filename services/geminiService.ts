@@ -20,7 +20,7 @@ import { fileToBase64 } from "../utils/fileUtils";
 // This function gets the standard AI client.
 const getAiClient = () => {
   if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set.");
+    throw new Error("API_KEY  environment variable not set.");
   }
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
