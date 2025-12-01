@@ -17,12 +17,14 @@ import type {
 } from "../types";
 import { fileToBase64 } from "../utils/fileUtils";
 
+const API_KEY = import.meta.env.VITE_API_KEY;
+
 // This function gets the standard AI client.
 const getAiClient = () => {
-  if (!process.env.API_KEY) {
+  if (!API_KEY) {
     throw new Error("API_KEY  environment variable not set.");
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey: API_KEY });
 };
 
 // This function checks for and prompts the user to select a billing-enabled API key for premium models.
@@ -47,14 +49,14 @@ const getPremiumAiClient = async (): Promise<GoogleGenAI> => {
   }
 
   // Re-check for the API_KEY after the dialog might have run.
-  if (!process.env.API_KEY) {
+  if (!API_KEY) {
     throw new Error(
       "API_KEY environment variable not set. Please select a key for premium features."
     );
   }
 
   // Return a NEW client instance to ensure it uses the latest key from the environment.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey: API_KEY });
 };
 
 // --- Schemas ---
@@ -1128,7 +1130,7 @@ export async function generateVideoFromImage(
       operation: operation,
     });
   }
-  return `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${process.env.API_KEY}`;
+  return `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${API_KEY}`;
 }
 
 export async function textToSpeech(text: string): Promise<void> {
