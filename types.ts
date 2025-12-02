@@ -69,7 +69,7 @@ export interface Visagism360Report {
       title: string;
       svg: string;
     }>;
-    simulatedImage?: string;
+    simulatedImage?: string; // New field for the generated image
   }>;
 }
 
