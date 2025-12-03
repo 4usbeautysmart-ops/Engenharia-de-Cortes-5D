@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
     const preference = new Preference(client);
 
-    let planDetails = { title: "Plano Mensal", unit_price: 498 };
+    let planDetails = { title: "Plano Mensal", unit_price: 249 };
 
     const resposta = await preference.create({
       body: {
@@ -53,9 +53,9 @@ export default async function handler(req, res) {
         payer: { email: userEmail },
         external_reference: userId,
         back_urls: {
-          success: "https://engenharia-de-cortes-5d.vercel.app/",
-          failure: "https://engenharia-de-cortes-5d.vercel.app/",
-          pending: "https://engenharia-de-cortes-5d.vercel.app/",
+          success: "https://engenharia-de-cortes-5-d.vercel.app/",
+          failure: "https://engenharia-de-cortes-5-d.vercel.app/",
+          pending: "https://engenharia-de-cortes-5-d.vercel.app/",
         },
         auto_return: "approved",
         metadata: { planType },
