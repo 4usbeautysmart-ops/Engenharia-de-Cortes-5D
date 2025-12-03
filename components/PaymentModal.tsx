@@ -10,16 +10,34 @@ interface PaymentModalProps {
   onClose: () => void;
   user?: AppUser | null;
   onSubscriptionUpdated?: (updatedUser: AppUser) => void;
+  isAccessExpired?: boolean; // Indica se o acesso expirou (trial ou assinatura)
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ 
   isOpen, 
   onClose, 
   user,
-  onSubscriptionUpdated 
+  onSubscriptionUpdated,
+  isAccessExpired = false
 }) => {
   const [isWaitingPayment, setIsWaitingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [hasValidAccess, setHasValidAccess] = useState(false);
+
+  // Verifica se o usuário tem acesso válido
+  const checkAccess = (userData: AppUser | null | undefined) => {
+    if (!userData) return false;
+    const now = Date.now();
+    const hasActiveSubscription =
+      userData.subscriptionStatus === "active" &&
+      typeof userData.accessUntil === "number" &&
+      userData.accessUntil > now;
+    const isInTrial =
+      userData.subscriptionStatus === "trial" &&
+      typeof userData.trialEndsAt === "number" &&
+      userData.trialEndsAt > now;
+    return hasActiveSubscription || isInTrial;
+  };
 
   // Listener do Firestore para detectar atualizações do webhook
   useEffect(() => {
@@ -45,6 +63,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           accessUntil: data.accessUntil,
           paymentId: data.paymentId,
         };
+
+        // Verifica se tem acesso válido agora
+        const hasAccess = checkAccess(updatedUser);
+        setHasValidAccess(hasAccess);
 
         // Se o status mudou para "active" e tem accessUntil válido, pagamento aprovado
         if (
@@ -88,7 +110,32 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     return () => unsubscribe();
   }, [isOpen, user?.uid, onSubscriptionUpdated, onClose]);
 
+  // Atualiza o estado de acesso válido quando o usuário muda
+  useEffect(() => {
+    if (user) {
+      setHasValidAccess(checkAccess(user));
+    } else {
+      setHasValidAccess(false);
+    }
+  }, [user]);
+
   if (!isOpen) return null;
+
+  // Se o acesso expirou, não permite fechar o modal
+  const canClose = !isAccessExpired || hasValidAccess;
+  
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (!canClose) {
+      e.stopPropagation();
+      return;
+    }
+    onClose();
+  };
+
+  const handleCloseClick = () => {
+    if (!canClose) return;
+    onClose();
+  };
 
   const handleStartCheckout = async () => {
     if (!user) {
@@ -145,7 +192,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+    <div 
+      className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-50" 
+      onClick={handleBackdropClick}
+    >
       <div className="bg-gray-800 rounded-2xl p-8 w-full max-w-md flex flex-col shadow-2xl shadow-emerald-500/10" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start pb-4 mb-4 border-b border-gray-700">
           <div>
@@ -165,10 +215,33 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-700">
-            <Icon name="close" className="w-6 h-6 text-gray-400" />
-          </button>
+          {canClose ? (
+            <button onClick={handleCloseClick} className="p-2 rounded-full hover:bg-gray-700 transition-colors">
+              <Icon name="close" className="w-6 h-6 text-gray-400" />
+            </button>
+          ) : (
+            <div className="p-2">
+              <div className="w-6 h-6 flex items-center justify-center">
+                <span className="text-xs text-red-400 font-semibold">Obrigatório</span>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Aviso quando acesso expirou */}
+        {isAccessExpired && !hasValidAccess && (
+          <div className="mb-4 p-4 bg-red-500/20 border border-red-500/40 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <span className="text-red-400 text-lg">⚠️</span>
+              </div>
+              <p className="text-red-300 font-semibold text-sm">Acesso Expirado</p>
+            </div>
+            <p className="text-red-200 text-xs">
+              Seu período de acesso (teste grátis ou assinatura) expirou. É necessário realizar o pagamento para continuar usando o sistema.
+            </p>
+          </div>
+        )}
         
         <div className="flex-grow space-y-4 mb-8">
             <ul className="space-y-3">
