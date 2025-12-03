@@ -128,8 +128,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         cred.user.email || email,
         name || cred.user.displayName || undefined
       );
+      
+      // Busca dados atualizados do Firestore para verificar expiração
+      const userRef = doc(db, 'users', cred.user.uid);
+      const userSnap = await getDoc(userRef);
+      let finalUser = userWithTrial;
+      
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        finalUser = {
+          uid: cred.user.uid,
+          email: data.email || cred.user.email || email,
+          fullName: data.fullName || name || cred.user.displayName,
+          subscriptionStatus: data.subscriptionStatus || 'trial',
+          trialEndsAt: data.trialEndsAt,
+          accessUntil: data.accessUntil,
+          paymentId: data.paymentId,
+        };
+      }
+      
       setIsLoading(false);
-      onLogin(userWithTrial);
+      onLogin(finalUser);
     } catch (err: any) {
       console.error(err);
       let message = 'Erro ao autenticar. Tente novamente.';

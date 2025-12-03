@@ -127,7 +127,7 @@ export default function App() {
         if (!allowed) {
           // Se expirou, abre o modal de pagamento
           setIsPaymentModalOpen(true);
-      } else {
+        } else {
           // Se tem acesso válido, fecha o modal se estiver aberto
           setIsPaymentModalOpen(false);
         }
@@ -292,6 +292,12 @@ export default function App() {
   };
 
   const handleGenerateHairstylistReport = async () => {
+    // Verifica acesso antes de gerar
+    if (!evaluateAccess(currentUser)) {
+      setIsPaymentModalOpen(true);
+      return;
+    }
+    
     // Allows generation if client photo exists AND (reference photo OR text description exists)
     if (!clientPhoto || (!referencePhoto && !hairstylistDescription.trim()))
       return;
@@ -314,6 +320,12 @@ export default function App() {
   };
 
   const handleGenerateVisagism360 = async () => {
+      // Verifica acesso antes de gerar
+      if (!evaluateAccess(currentUser)) {
+        setIsPaymentModalOpen(true);
+        return;
+      }
+      
       if (!visagism360Image) return;
       setIsLoading(true);
       setLoadingMessage("Gerando análise, diagramas e simulações de imagem...");
@@ -329,6 +341,12 @@ export default function App() {
   };
 
   const handleGenerateBarber = async () => {
+      // Verifica acesso antes de gerar
+      if (!evaluateAccess(currentUser)) {
+        setIsPaymentModalOpen(true);
+        return;
+      }
+      
       if (!barberClientPhoto) return;
       setIsLoading(true);
       setLoadingMessage("Consultando o Barbeiro Visagista...");
@@ -348,6 +366,12 @@ export default function App() {
   };
 
   const handleGenerateTherapy = async () => {
+      // Verifica acesso antes de gerar
+      if (!evaluateAccess(currentUser)) {
+        setIsPaymentModalOpen(true);
+        return;
+      }
+      
       if (!therapyClientPhoto) return;
       setIsLoading(true);
       setLoadingMessage("Analisando saúde capilar e criando cronograma...");
@@ -676,6 +700,12 @@ export default function App() {
                                 <button 
                                     id="colorist-generate-button"
                                     onClick={async () => {
+                        // Verifica acesso antes de gerar
+                        if (!evaluateAccess(currentUser)) {
+                          setIsPaymentModalOpen(true);
+                          return;
+                        }
+                        
                         if (
                           !clientImageForColor ||
                           (!coloristReferencePhoto &&
