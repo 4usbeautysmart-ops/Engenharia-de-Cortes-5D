@@ -2,9 +2,31 @@
 import React, { useState } from 'react';
 import { Icon } from './Icon';
 import { Logo } from './Logo';
+import { auth, db } from '../firebase';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+
+export interface AppUser {
+  uid: string;
+  email: string;
+  fullName?: string;
+  subscriptionStatus?: 'trial' | 'active' | 'inactive';
+  trialEndsAt?: number;
+  accessUntil?: number;
+  paymentId?: string;
+}
 
 interface AuthScreenProps {
-  onLogin: (isAdmin?: boolean) => void;
+  onLogin: (user: AppUser) => void;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
@@ -14,23 +36,113 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Admin Backdoor / Exclusive Access
-    if (email === 'admin' && password === 'admin') {
-        onLogin(true); // Pass true for Admin
-        return;
+  const createOrUpdateUserDocWithTrial = async (
+    uid: string,
+    emailValue: string,
+    fullNameValue?: string
+  ): Promise<AppUser> => {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+    const now = Date.now();
+    const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+
+    // Já existe documento: apenas garante campos básicos
+    if (snap.exists()) {
+      const data = snap.data() as any;
+      const user: AppUser = {
+        uid,
+        email: data.email || emailValue,
+        fullName: data.fullName || fullNameValue,
+        subscriptionStatus: data.subscriptionStatus || 'trial',
+        trialEndsAt: data.trialEndsAt,
+        accessUntil: data.accessUntil,
+        paymentId: data.paymentId,
+      };
+
+      // Se não tem trial configurado ainda, cria agora
+      if (!user.trialEndsAt && !user.accessUntil) {
+        const trialEndsAt = now + twoDaysMs;
+        await updateDoc(userRef, {
+          email: user.email,
+          fullName: user.fullName || '',
+          subscriptionStatus: 'trial',
+          trialEndsAt,
+          accessUntil: trialEndsAt,
+          updatedAt: serverTimestamp(),
+        });
+        user.subscriptionStatus = 'trial';
+        user.trialEndsAt = trialEndsAt;
+        user.accessUntil = trialEndsAt;
+      }
+
+      return user;
     }
 
+    // Novo usuário: cria com teste grátis de 2 dias
+    const trialEndsAt = now + twoDaysMs;
+    const newUser: AppUser = {
+      uid,
+      email: emailValue,
+      fullName: fullNameValue,
+      subscriptionStatus: 'trial',
+      trialEndsAt,
+      accessUntil: trialEndsAt,
+    };
+
+    await setDoc(userRef, {
+      email: emailValue,
+      fullName: fullNameValue || '',
+      subscriptionStatus: 'trial',
+      trialEndsAt,
+      accessUntil: trialEndsAt,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newUser;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
     setIsLoading(true);
-    
-    // Simulação de delay de rede para usuários normais
-    setTimeout(() => {
+
+    try {
+      if (isSignUp) {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const userWithTrial = await createOrUpdateUserDocWithTrial(
+          cred.user.uid,
+          cred.user.email || email,
+          name
+        );
+        setIsLoading(false);
+        onLogin(userWithTrial);
+        return;
+      }
+
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const userWithTrial = await createOrUpdateUserDocWithTrial(
+        cred.user.uid,
+        cred.user.email || email,
+        name || cred.user.displayName || undefined
+      );
       setIsLoading(false);
-      onLogin(false); // Pass false for Normal User
-    }, 1500);
+      onLogin(userWithTrial);
+    } catch (err: any) {
+      console.error(err);
+      let message = 'Erro ao autenticar. Tente novamente.';
+      if (err.code === 'auth/user-not-found') {
+        message = 'Usuário não encontrado.';
+      } else if (err.code === 'auth/wrong-password') {
+        message = 'Senha incorreta.';
+      } else if (err.code === 'auth/email-already-in-use') {
+        message = 'Este e-mail já está em uso.';
+      }
+      setError(message);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -98,6 +210,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                   />
                 </div>
               </div>
+            )}
+
+            {error && (
+              <p className="text-sm text-red-400 bg-red-900/30 border border-red-700 rounded-lg px-3 py-2">
+                {error}
+              </p>
             )}
 
             <div className="space-y-1">
