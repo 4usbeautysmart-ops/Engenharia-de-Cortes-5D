@@ -976,7 +976,7 @@ export async function generateHairTherapyReport(
 export async function generateRealisticImage(prompt: string): Promise<string> {
   const ai = await getPremiumAiClient();
   const response = await ai.models.generateImages({
-    model: "gemini-2.5-flash-image", // Or 'gemini-3-pro-image-preview' if available/preferred
+    model: "imagen-4.0-generate-001", // Or 'gemini-3-pro-image-preview' if available/preferred
     prompt: `${prompt}, 8k, photorealistic, professional studio lighting`,
     config: {
       numberOfImages: 1,
@@ -997,7 +997,7 @@ export async function editImageWithText(
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
+      model: "gemini-3-pro-image-preview",
       contents: {
         parts: [
           { inlineData: { data: imageData, mimeType: mimeType } },
