@@ -1,4 +1,6 @@
-import type { CuttingPlan, VisagismReport, ColoristReport, Visagism360Report, BarberReport, HairTherapyReport, HairstylistReport, SimulatedTurnaround } from '../types';
+
+
+import type { CuttingPlan, VisagismReport, ColoristReport, Visagism360Report, BarberReport, HairTherapyReport } from '../types';
 
 export async function generatePdf(
   plan: CuttingPlan,
@@ -393,14 +395,14 @@ export async function generateColoristPdf(
   };
 
   // --- Header ---
-  addText('Relatório de Colorimetria Expert', 22, 'bold', margin);
+  addText('Relatório de Colorimetria Expert', 22, 'bold', margin, margin);
   yPos += 5;
 
   // --- Images ---
   checkPageBreak(85);
   const imageWidth = (pageWidth - (margin * 3)) / 2;
   const imageHeight = 75;
-  addText('Antes e Depois', 11, 'bold', margin);
+  addText('Antes e Depois', 11, 'bold', margin, margin);
   doc.addImage(clientImage, 'JPEG', margin, yPos, imageWidth, imageHeight);
   doc.addImage(tryOnImage, 'JPEG', margin + imageWidth + margin, yPos, imageWidth, imageHeight);
   yPos += imageHeight + 8;
@@ -475,150 +477,12 @@ export async function generateColoristPdf(
   return doc.output('blob');
 }
 
-export async function generateHairstylistPdf(
-  reportData: { report: HairstylistReport; simulatedImage: SimulatedTurnaround },
-  clientImage: string,
-  referenceImage: string
-): Promise<Blob> {
-  const { report, simulatedImage } = reportData;
-  // @ts-ignore
-  const { jsPDF } = window.jspdf;
-  // @ts-ignore
-  const html2canvas = window.html2canvas;
-
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const pageHeight = doc.internal.pageSize.height;
-  const pageWidth = doc.internal.pageSize.width;
-  const margin = 15;
-  let yPos = margin;
-
-  // --- Helpers ---
-  const checkPageBreak = (heightNeeded: number) => {
-    if (yPos + heightNeeded > pageHeight - margin) {
-      doc.addPage();
-      yPos = margin;
-    }
-  };
-  
-  const addText = (text: string | string[], size: number, style: 'bold' | 'normal' | 'italic', x: number, maxWidth?: number) => {
-    doc.setFontSize(size);
-    doc.setFont('helvetica', style);
-    const splitText = doc.splitTextToSize(text, maxWidth || (pageWidth - margin * 2));
-    checkPageBreak(splitText.length * size * 0.35 + 2);
-    doc.text(splitText, x, yPos);
-    yPos += (splitText.length * (size * 0.35)) + 2;
-  };
-  
-  const addSectionTitle = (title: string) => {
-    checkPageBreak(15);
-    doc.setDrawColor(209, 213, 219); // gray
-    doc.setLineWidth(0.2);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
-    yPos += 8;
-    addText(title, 14, 'bold', margin);
-  };
-
-  // --- Header ---
-  addText('Análise Hairstylist Visagista', 22, 'bold', margin);
-  yPos += 5;
-
-  // --- Images ---
-  checkPageBreak(75);
-  const imageWidth = (pageWidth - (margin * 4)) / 3;
-  const imageHeight = 65;
-  addText('Comparativo Visual', 11, 'bold', margin);
-  yPos += 2;
-  
-  if (clientImage) doc.addImage(clientImage, 'JPEG', margin, yPos, imageWidth, imageHeight);
-  if (referenceImage) doc.addImage(referenceImage, 'JPEG', margin + imageWidth + margin, yPos, imageWidth, imageHeight);
-  if (simulatedImage && simulatedImage.front) {
-    doc.addImage(simulatedImage.front, 'JPEG', margin + 2 * (imageWidth + margin), yPos, imageWidth, imageHeight);
-  }
-  
-  // Add labels under images
-  doc.setFontSize(8);
-  doc.text('Cliente (Antes)', margin + imageWidth/2, yPos + imageHeight + 4, { align: 'center' });
-  doc.text('Referência', margin + imageWidth + margin + imageWidth/2, yPos + imageHeight + 4, { align: 'center' });
-  doc.text('Simulação (IA)', margin + 2 * (imageWidth + margin) + imageWidth/2, yPos + imageHeight + 4, { align: 'center' });
-
-  yPos += imageHeight + 10;
-  
-  // --- Verdict ---
-  addSectionTitle('Veredito da Análise');
-  addText(report.viabilityVerdict, 12, 'bold', margin);
-  addText(report.viabilityJustification, 10, 'italic', margin, pageWidth - margin * 2 - 5);
-  yPos += 5;
-
-  // --- Recommendations ---
-  if (report.adaptationRecommendations && report.adaptationRecommendations.length > 0) {
-    addSectionTitle('Recomendações de Adaptação');
-    report.adaptationRecommendations.forEach(rec => addText(`• ${rec}`, 10, 'normal', margin + 4));
-    yPos += 5;
-  }
-  
-  // --- Cutting Plan ---
-  addSectionTitle(`Plano de Corte: ${report.cuttingPlan.styleName}`);
-  addText('Passo a Passo:', 11, 'bold', margin);
-  report.cuttingPlan.steps.forEach((step, index) => {
-      addText(`${index + 1}. ${step}`, 10, 'normal', margin + 4);
-  });
-  yPos += 5;
-
-  // --- Diagrams ---
-  if (report.cuttingPlan.diagrams && report.cuttingPlan.diagrams.length > 0) {
-    addSectionTitle('Diagramas Técnicos');
-    const diagramContainer = document.createElement('div');
-    diagramContainer.style.position = 'absolute';
-    diagramContainer.style.left = '-9999px';
-    document.body.appendChild(diagramContainer);
-
-    for (const diagram of report.cuttingPlan.diagrams) {
-      const svgDiv = document.createElement('div');
-      svgDiv.style.width = '250px';
-      svgDiv.style.height = '250px';
-      svgDiv.style.backgroundColor = '#111827'; // Dark background for high-tech SVGs
-      svgDiv.innerHTML = diagram.svg;
-      diagramContainer.appendChild(svgDiv);
-      
-      const canvas = await html2canvas(svgDiv, { backgroundColor: '#111827', scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      diagramContainer.removeChild(svgDiv);
-
-      const diagramHeight = 70;
-      const diagramWidth = (canvas.width * diagramHeight) / canvas.height;
-      
-      checkPageBreak(diagramHeight + 15);
-      addText(diagram.title, 11, 'bold', margin);
-      doc.addImage(imgData, 'PNG', margin, yPos, diagramWidth, diagramHeight);
-      yPos += diagramHeight + 8;
-    }
-    document.body.removeChild(diagramContainer);
-  }
-
-  // --- Home Care ---
-  addSectionTitle(`Home Care (${report.homeCare.brand})`);
-  addText('Produtos Recomendados:', 11, 'bold', margin);
-  report.homeCare.products.forEach(p => {
-    addText(`• ${p.name}: ${p.purpose}`, 10, 'normal', margin + 4);
-  });
-  yPos += 3;
-  addText('Guia de Aplicação:', 11, 'bold', margin);
-  report.homeCare.applicationGuide.forEach(step => {
-    addText(`- ${step}`, 10, 'normal', margin + 4);
-  });
-
-  return doc.output('blob');
-}
-
-
 export async function generateVisagism360Pdf(
     report: Visagism360Report,
     clientImage: string
 ): Promise<Blob> {
     // @ts-ignore
     const { jsPDF } = window.jspdf;
-    // @ts-ignore
-    const html2canvas = window.html2canvas;
 
     const doc = new jsPDF({
         orientation: 'p',
@@ -643,7 +507,6 @@ export async function generateVisagism360Pdf(
         doc.setFont('helvetica', style);
         const splitText = doc.splitTextToSize(text, maxWidth || (pageWidth - margin * 2));
         doc.text(splitText, x, yPos);
-        yPos += (splitText.length * (size * 0.35)) + 2; // Return height and move yPos
         return (splitText.length * (size * 0.35)) + 2;
     };
     
@@ -654,7 +517,7 @@ export async function generateVisagism360Pdf(
         doc.line(margin, yPos, pageWidth - margin, yPos);
         yPos += 8;
         doc.setTextColor(color[0], color[1], color[2]);
-        addText(title, 14, 'bold', margin);
+        yPos += addText(title, 14, 'bold', margin);
         doc.setTextColor(0, 0, 0); // Reset to black
         yPos += 2;
     };
@@ -663,121 +526,102 @@ export async function generateVisagism360Pdf(
     doc.setDrawColor(147, 51, 234); // Purple for 360
     doc.setLineWidth(1);
     doc.line(margin, yPos - 5, pageWidth - margin, yPos - 5);
-    addText('Visagismo 360°', 22, 'bold', margin);
+    yPos += addText('Visagismo 360°', 22, 'bold', margin, pageWidth - margin * 2);
     yPos += 5;
 
     // --- Image & Face Analysis ---
     checkPageBreak(85);
     const imageWidth = 80;
     const imageHeight = 80;
+    // Ensure clientImage is safe to add.
     if (clientImage) {
         doc.addImage(clientImage, 'JPEG', margin, yPos, imageWidth, imageHeight);
     }
     
+    // Face details on the right
     let rightColX = margin + imageWidth + 10;
-    let tempY = yPos;
-    let tempYPos = yPos; // Save yPos before adding text
-    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-    doc.text('Análise Facial', rightColX, tempY + 5);
-    tempY += 12;
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`Formato: ${report.faceShape}`, rightColX, tempY);
-    tempY += 7;
-    doc.text(doc.splitTextToSize(report.analysis, pageWidth - rightColX - margin), rightColX, tempY);
-    yPos = tempYPos; // Restore yPos
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Análise Facial', rightColX, yPos + 5);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Formato: ${report.faceShape}`, rightColX, yPos + 12);
+    
+    const splitAnalysis = doc.splitTextToSize(report.analysis, pageWidth - rightColX - margin);
+    doc.text(splitAnalysis, rightColX, yPos + 20);
+    
+    const textHeight = (splitAnalysis.length * 4);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Características Físicas:', rightColX, yPos + 20 + textHeight + 5);
+    doc.setFont('helvetica', 'normal');
+    const splitFeatures = doc.splitTextToSize(report.physicalFeatures, pageWidth - rightColX - margin);
+    doc.text(splitFeatures, rightColX, yPos + 20 + textHeight + 10);
+
     yPos += imageHeight + 10;
 
     // --- Colorimetry ---
     addSectionTitle('Colorimetria Pessoal', [219, 39, 119]); // Pink
-    addText(`Cartela: ${report.colorimetry.season}`, 12, 'bold', margin);
-    addText(report.colorimetry.characteristics, 10, 'normal', margin);
+    yPos += addText(`Cartela: ${report.colorimetry.season}`, 12, 'bold', margin);
+    yPos += addText(report.colorimetry.characteristics, 10, 'normal', margin);
     yPos += 5;
     
+    // Draw Color Palette
     checkPageBreak(25);
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
     doc.text('Paleta Sugerida:', margin, yPos + 5);
+    
     let paletteX = margin + 35;
+    const radius = 6;
+    
     if (report.colorimetry.bestColors) {
         report.colorimetry.bestColors.forEach((color) => {
-            const isHex = /^#([0-9A-Fa-f]{3}){1,2}$/.test(color);
-            if (!isHex) {
-                console.warn(`Invalid color format skipped in PDF: "${color}"`);
-                return; // Skip this invalid color
-            }
-
-            if (paletteX > pageWidth - margin - 12) {
-                yPos += 15;
-                paletteX = margin + 35;
-            }
             doc.setFillColor(color);
-            doc.circle(paletteX, yPos + 3, 6, 'F');
-            paletteX += 17;
+            doc.setDrawColor(200, 200, 200);
+            doc.circle(paletteX, yPos + 3, radius, 'FD'); // Fill and Draw border
+            paletteX += (radius * 2) + 5;
         });
     }
     yPos += 15;
 
     // --- Styles ---
-    addSectionTitle('Sugestões de Cortes', [147, 51, 234]);
+    addSectionTitle('Sugestões de Cortes', [147, 51, 234]); // Purple
     
-    const diagramContainer = document.createElement('div');
-    diagramContainer.style.position = 'absolute';
-    diagramContainer.style.left = '-9999px';
-    document.body.appendChild(diagramContainer);
-
-    for (const style of report.styles) {
-        checkPageBreak(60);
-        addText(`${style.name}`, 12, 'bold', margin);
-        addText(style.description, 10, 'normal', margin);
+    report.styles.forEach((style, index) => {
+        checkPageBreak(60); // Check enough space for a style block
+        yPos += addText(`${index + 1}. ${style.name}`, 12, 'bold', margin);
+        yPos += addText(style.description, 10, 'normal', margin);
         yPos += 3;
         
         if (style.technicalDetails) {
-            addText('Detalhes Técnicos:', 10, 'bold', margin);
-            addText(style.technicalDetails, 10, 'normal', margin);
+            yPos += addText('Detalhes Técnicos:', 10, 'bold', margin);
+            yPos += addText(style.technicalDetails, 10, 'normal', margin);
             yPos += 3;
-        }
-
-        if (style.diagrams && style.diagrams.length > 0) {
-            yPos += 2;
-            addText('Diagramas Técnicos:', 10, 'bold', margin);
-            for (const diagram of style.diagrams) {
-                const svgDiv = document.createElement('div');
-                svgDiv.style.width = '250px';
-                svgDiv.style.height = '250px';
-                svgDiv.style.backgroundColor = '#111827';
-                svgDiv.innerHTML = diagram.svg;
-                diagramContainer.appendChild(svgDiv);
-                
-                const canvas = await html2canvas(svgDiv, { backgroundColor: '#111827', scale: 2 });
-                const imgData = canvas.toDataURL('image/png');
-                diagramContainer.removeChild(svgDiv);
-
-                const diagramHeight = 70;
-                const diagramWidth = (canvas.width * diagramHeight) / canvas.height;
-                
-                checkPageBreak(diagramHeight + 15);
-                addText(diagram.title, 10, 'italic', margin);
-                doc.addImage(imgData, 'PNG', margin, yPos, diagramWidth, diagramHeight);
-                yPos += diagramHeight + 8;
-            }
         }
 
         if (style.stylingTips) {
-            addText('Dicas de Finalização:', 10, 'bold', margin);
-            addText(style.stylingTips, 10, 'normal', margin);
+            yPos += addText('Dicas de Finalização:', 10, 'bold', margin);
+            yPos += addText(style.stylingTips, 10, 'normal', margin);
             yPos += 3;
         }
 
-        doc.setFillColor(243, 232, 255);
-        const reasonLines = doc.splitTextToSize(`Por que funciona: ${style.harmonyPoints.join(' ')}`, pageWidth - margin * 2 - 4);
+        // Reason box
+        doc.setFillColor(243, 232, 255); // Light purple bg
+        const reasonLines = doc.splitTextToSize(`Por que funciona: ${style.reason}`, pageWidth - margin * 2 - 4);
         const boxHeight = (reasonLines.length * 4) + 6;
+        
         checkPageBreak(boxHeight + 5);
         doc.rect(margin, yPos, pageWidth - margin * 2, boxHeight, 'F');
-        doc.setTextColor(88, 28, 135);
+        doc.setTextColor(88, 28, 135); // Dark purple text
         doc.text(reasonLines, margin + 2, yPos + 5);
-        doc.setTextColor(0, 0, 0);
+        doc.setTextColor(0, 0, 0); // Reset
+        
         yPos += boxHeight + 8;
-    }
-    document.body.removeChild(diagramContainer);
+    });
 
     return doc.output('blob');
 }
@@ -812,16 +656,15 @@ export async function generateBarberPdf(
         doc.setFontSize(size);
         doc.setFont('helvetica', style);
         const splitText = doc.splitTextToSize(text, maxWidth || (pageWidth - margin * 2));
-        checkPageBreak(splitText.length * size * 0.35 + 2);
         doc.text(splitText, x, yPos);
-        yPos += (splitText.length * (size * 0.35)) + 2;
+        return (splitText.length * (size * 0.35)) + 2;
     };
 
     // Header
     doc.setDrawColor(37, 99, 235); // Blue
     doc.setLineWidth(1);
     doc.line(margin, yPos - 5, pageWidth - margin, yPos - 5);
-    addText('Dossiê Barbeiro Visagista', 22, 'bold', margin);
+    yPos += addText('Dossiê Barbeiro Visagista', 22, 'bold', margin);
     yPos += 5;
 
     // Images
@@ -831,27 +674,27 @@ export async function generateBarberPdf(
     yPos += imgSize + 10;
 
     // Analysis
-    addText('Análise Facial Masculina', 14, 'bold', margin);
-    addText(`Formato: ${report.faceAnalysis.shape}`, 11, 'normal', margin);
-    addText(`Características: ${report.faceAnalysis.features}`, 11, 'normal', margin);
+    yPos += addText('Análise Facial Masculina', 14, 'bold', margin);
+    yPos += addText(`Formato: ${report.faceAnalysis.shape}`, 11, 'normal', margin);
+    yPos += addText(`Características: ${report.faceAnalysis.features}`, 11, 'normal', margin);
     yPos += 5;
 
     // Haircut
     checkPageBreak(40);
-    addText(`Corte: ${report.haircut.styleName}`, 14, 'bold', margin);
-    addText(report.haircut.description, 11, 'normal', margin);
+    yPos += addText(`Corte: ${report.haircut.styleName}`, 14, 'bold', margin);
+    yPos += addText(report.haircut.description, 11, 'normal', margin);
     yPos += 3;
-    addText('Passo a Passo Técnico:', 11, 'bold', margin);
+    yPos += addText('Passo a Passo Técnico:', 11, 'bold', margin);
     report.haircut.technicalSteps.forEach(step => {
-        addText(`- ${step}`, 10, 'normal', margin + 5);
+        yPos += addText(`- ${step}`, 10, 'normal', margin + 5);
     });
 
     // Beard
     checkPageBreak(30);
     yPos += 5;
-    addText('Barba', 14, 'bold', margin);
-    addText(`Recomendação: ${report.beard.recommendation}`, 11, 'normal', margin);
-    addText(`Manutenção: ${report.beard.maintenance}`, 11, 'normal', margin);
+    yPos += addText('Barba', 14, 'bold', margin);
+    yPos += addText(`Recomendação: ${report.beard.recommendation}`, 11, 'normal', margin);
+    yPos += addText(`Manutenção: ${report.beard.maintenance}`, 11, 'normal', margin);
 
     return doc.output('blob');
 }
@@ -870,7 +713,6 @@ export async function generateHairTherapyPdf(
     const margin = 15;
     let yPos = margin;
 
-    // --- Helpers ---
     const checkPageBreak = (heightNeeded: number) => {
         if (yPos + heightNeeded > pageHeight - margin) {
             doc.addPage();
@@ -878,84 +720,106 @@ export async function generateHairTherapyPdf(
         }
     };
 
-    const addText = (text: string | string[], size: number, style: 'bold' | 'normal' | 'italic', x: number, maxWidth?: number): number => {
+    const addText = (text: string, size: number, style: 'bold' | 'normal' | 'italic', x: number, maxWidth?: number) => {
         doc.setFontSize(size);
         doc.setFont('helvetica', style);
         const splitText = doc.splitTextToSize(text, maxWidth || (pageWidth - margin * 2));
-        const textHeight = (splitText.length * (size * 0.35));
-        checkPageBreak(textHeight + 4);
         doc.text(splitText, x, yPos);
-        return textHeight + 2;
-    };
-    
-    const addSectionTitle = (title: string, color: [number, number, number] = [0, 100, 90]) => {
-      checkPageBreak(15);
-      doc.setDrawColor(209, 213, 219);
-      doc.setLineWidth(0.2);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 8;
-      doc.setTextColor(color[0], color[1], color[2]);
-      yPos += addText(title, 14, 'bold', margin);
-      doc.setTextColor(0, 0, 0);
-      yPos += 2;
+        return (splitText.length * (size * 0.35)) + 2;
     };
 
-    // --- Header ---
+    // Header
     doc.setTextColor(0, 150, 136); // Teal/Cyan
-    addText('Dossiê de Terapia Capilar', 22, 'bold', margin);
+    yPos += addText('Dossiê de Terapia Capilar', 22, 'bold', margin);
     doc.setTextColor(0, 0, 0);
     yPos += 5;
 
-    // --- Images ---
+    // Images
     checkPageBreak(75);
     const imgSize = 70;
     doc.addImage(clientImage, 'JPEG', margin, yPos, imgSize, imgSize);
     doc.addImage(simulatedImage, 'JPEG', margin + imgSize + 10, yPos, imgSize, imgSize);
     yPos += imgSize + 10;
     
-    // --- User Complaint (Dynamic Height) ---
+    // User Complaint / Problem Description
     if (report.userComplaint) {
-        addSectionTitle("Relato do Cliente", [88, 28, 135]);
-        yPos += addText(report.userComplaint, 10, 'italic', margin, pageWidth - margin * 2);
-        yPos += 5;
+        checkPageBreak(25);
+        doc.setFillColor(243, 244, 246); // Light gray
+        doc.setDrawColor(209, 213, 219);
+        doc.rect(margin, yPos, pageWidth - margin * 2, 20, 'F');
+        doc.setTextColor(0, 100, 90);
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('RELATO DO CLIENTE:', margin + 4, yPos + 6);
+        doc.setTextColor(55, 65, 81); // Dark gray text
+        
+        const splitComplaint = doc.splitTextToSize(report.userComplaint, pageWidth - margin * 2 - 10);
+        doc.setFontSize(10); doc.setFont('helvetica', 'italic');
+        doc.text(splitComplaint, margin + 4, yPos + 12);
+        
+        // Adjust yPos based on text height if needed, for simplicity we used fixed rect
+        yPos += 25; 
     }
 
-    // --- Diagnosis (Dynamic) ---
-    addSectionTitle("Diagnóstico do Fio");
-    yPos += addText(`Nível de Dano: ${report.diagnosis.damageLevel}`, 10, 'normal', margin);
-    yPos += addText(`Porosidade: ${report.diagnosis.porosity}`, 10, 'normal', margin);
-    yPos += addText(`Elasticidade: ${report.diagnosis.elasticity}`, 10, 'normal', margin);
-    yPos += 3;
-    yPos += addText('Análise Visual:', 10, 'bold', margin);
-    yPos += addText(report.diagnosis.visualAnalysis, 10, 'italic', margin, pageWidth - margin * 2 - 5);
+    // Diagnosis Box
+    checkPageBreak(40);
+    doc.setDrawColor(0, 150, 136);
+    doc.rect(margin, yPos, pageWidth - margin * 2, 35);
+    let diagY = yPos + 6;
+    doc.setTextColor(0, 150, 136);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text('DIAGNÓSTICO DO FIO', margin + 5, diagY);
+    doc.setTextColor(0, 0, 0);
+    diagY += 8;
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Nível de Dano: ${report.diagnosis.damageLevel}`, margin + 5, diagY);
+    doc.text(`Porosidade: ${report.diagnosis.porosity}`, margin + 80, diagY);
+    diagY += 6;
+    doc.text(`Elasticidade: ${report.diagnosis.elasticity}`, margin + 5, diagY);
+    diagY += 8;
+    doc.setFont('helvetica', 'italic');
+    doc.text(`Obs: ${report.diagnosis.visualAnalysis}`, margin + 5, diagY);
+    
+    yPos += 45;
+
+    // Strategy
+    checkPageBreak(25);
+    addText(`Estratégia: ${report.treatmentStrategy.focus}`, 14, 'bold', margin);
+    addText(report.treatmentStrategy.explanation, 10, 'normal', margin);
     yPos += 5;
 
-    // --- Strategy ---
-    addSectionTitle("Estratégia de Tratamento");
-    yPos += addText(report.treatmentStrategy.focus, 12, 'bold', margin);
-    yPos += addText(report.treatmentStrategy.explanation, 10, 'normal', margin);
-    yPos += 5;
+    // Products
+    checkPageBreak(50);
+    doc.setFillColor(230, 255, 250); // Light teal bg
+    doc.rect(margin, yPos, pageWidth - margin * 2, 8, 'F');
+    doc.setTextColor(0, 100, 90);
+    doc.text('PRODUTOS PRESCRITOS', margin + 2, yPos + 6);
+    yPos += 12;
+    doc.setTextColor(0, 0, 0);
 
-    // --- Products ---
-    addSectionTitle("Produtos Prescritos");
     report.recommendedProducts.forEach(prod => {
-        checkPageBreak(20);
-        yPos += addText(`• ${prod.name}`, 11, 'bold', margin);
-        yPos += addText(`  ${prod.category} | ${prod.usageFrequency}`, 9, 'normal', margin);
-        yPos += addText(`  Motivo: ${prod.reason}`, 9, 'italic', margin + 2, pageWidth - margin*2 - 8);
-        yPos += 4;
+        checkPageBreak(15);
+        addText(`• ${prod.name}`, 11, 'bold', margin);
+        addText(`  ${prod.category} | ${prod.usageFrequency}`, 9, 'normal', margin);
+        addText(`  ${prod.reason}`, 9, 'italic', margin);
+        yPos += 2;
     });
-    yPos += 5;
+    yPos += 8;
 
-    // --- Schedule (Vertical Layout) ---
-    addSectionTitle("Cronograma Capilar (4 Semanas)");
+    // Schedule Grid (Simplified)
+    checkPageBreak(40);
+    addText('CRONOGRAMA (4 Semanas)', 12, 'bold', margin);
+    const colW = (pageWidth - margin * 2) / 4;
+    let gridX = margin;
+    
     report.hairSchedule.forEach(week => {
-        checkPageBreak(25);
-        yPos += addText(`Semana ${week.week}`, 11, 'bold', margin);
-        yPos += addText(`- Lavagem 1: ${week.treatment1}`, 10, 'normal', margin + 5);
-        yPos += addText(`- Lavagem 2: ${week.treatment2}`, 10, 'normal', margin + 5);
-        yPos += addText(`- Lavagem 3: ${week.treatment3}`, 10, 'normal', margin + 5);
-        yPos += 6;
+        doc.rect(gridX, yPos, colW, 30);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+        doc.text(`Semana ${week.week}`, gridX + 2, yPos + 5);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        doc.text(`1. ${week.treatment1}`, gridX + 2, yPos + 12);
+        doc.text(`2. ${week.treatment2}`, gridX + 2, yPos + 18);
+        doc.text(`3. ${week.treatment3}`, gridX + 2, yPos + 24);
+        gridX += colW;
     });
 
     return doc.output('blob');

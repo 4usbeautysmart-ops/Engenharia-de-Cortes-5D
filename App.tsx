@@ -1,25 +1,28 @@
-import React, { useState, useEffect } from "react";
-import { Header } from "./components/Header";
-import { ImageInput } from "./components/ImageInput";
-import { CuttingPlanDisplay } from "./components/CuttingPlanDisplay";
-import { ChatPanel } from "./components/ChatPanel";
-import { ActionButtons } from "./components/ActionButtons";
-import { LoadingOverlay } from "./components/LoadingOverlay";
-import { Icon } from "./components/Icon";
-import { VisagismReportDisplay } from "./components/VisagismReportDisplay";
-import { ColoristReportDisplay } from "./components/ColoristReportDisplay";
-import { HairstylistReportDisplay } from "./components/HairstylistReportDisplay";
-import { Visagism360Display } from "./components/Visagism360Display";
-import { BarberReportDisplay } from "./components/BarberReportDisplay";
-import { HairTherapyReportDisplay } from "./components/HairTherapyReportDisplay";
-import { TutorialOverlay } from "./components/TutorialOverlay";
-import { SavedPlansModal } from "./components/SavedPlansModal";
-import { PaymentModal } from "./components/PaymentModal";
-import { CatalogModal } from "./components/CatalogModal";
-import { AuthScreen, AppUser } from "./components/AuthScreen"; // Import AuthScreen
-import { auth, db } from "./firebase";
-import { signOut } from "firebase/auth";
-import { doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+
+
+import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import { Header } from './components/Header';
+import { ImageInput } from './components/ImageInput'; 
+import { CuttingPlanDisplay } from './components/CuttingPlanDisplay';
+import { ChatPanel } from './components/ChatPanel';
+import { ActionButtons } from './components/ActionButtons';
+import { LoadingOverlay } from './components/LoadingOverlay';
+import { Icon } from './components/Icon';
+import { VisagismReportDisplay } from './components/VisagismReportDisplay';
+import { ColoristReportDisplay } from './components/ColoristReportDisplay';
+import { HairstylistReportDisplay } from './components/HairstylistReportDisplay';
+import { Visagism360Display } from './components/Visagism360Display';
+import { BarberReportDisplay } from './components/BarberReportDisplay';
+import { HairTherapyReportDisplay } from './components/HairTherapyReportDisplay'; // New Import
+import { TutorialOverlay } from './components/TutorialOverlay';
+import { SavedPlansModal } from './components/SavedPlansModal';
+import { PaymentModal } from './components/PaymentModal';
+import { CatalogModal } from './components/CatalogModal';
+import { LoginScreen } from './components/LoginScreen';
+import { CreateAccountScreen } from './components/CreateAccountScreen';
 
 import {
   analyzeHaircutImage,
@@ -34,229 +37,239 @@ import {
   generateHairstylistReport,
   generateVisagism360Report,
   generateBarberReport,
-  generateHairTherapyReport,
-} from "./services/geminiService";
-import { fileToBase64, dataURLtoFile } from "./utils/fileUtils";
-import type {
-  CuttingPlan,
-  VisagismReport,
-  ColoristReport,
-  SavedPlan,
-  HairstylistReport,
-  Visagism360Report,
-  BarberReport,
-  SimulatedTurnaround,
-  HairTherapyReport,
-} from "./types";
-import { ImageUploader } from "./components/ImageUploader";
+  generateHairTherapyReport // New Service
+} from './services/geminiService';
+import { fileToBase64, dataURLtoFile } from './utils/fileUtils';
+import type { CuttingPlan, VisagismReport, ColoristReport, SavedPlan, HairstylistReport, Visagism360Report, BarberReport, SimulatedTurnaround, HairTherapyReport } from './types';
+import { ImageUploader } from './components/ImageUploader'; 
 
 export default function App() {
-  // Auth State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-
-  // Função para verificar se o usuário tem acesso válido (trial ou assinatura ativa)
-  const evaluateAccess = (user: AppUser | null) => {
-    if (!user) return false;
-    const now = Date.now();
-    
-    // Verifica se tem assinatura ativa (30 dias)
-    const hasActiveSubscription =
-      user.subscriptionStatus === "active" &&
-      typeof user.accessUntil === "number" &&
-      user.accessUntil > now;
-
-    // Verifica se está no período de trial (2 dias)
-    const isInTrial =
-      user.subscriptionStatus === "trial" &&
-      typeof user.trialEndsAt === "number" &&
-      user.trialEndsAt > now;
-
-    return hasActiveSubscription || isInTrial;
-  };
-
-  // Check for session on mount
-  useEffect(() => {
-    const stored = localStorage.getItem("appUser");
-    if (stored) {
-      try {
-        const parsed: AppUser = JSON.parse(stored);
-        setCurrentUser(parsed);
-        setIsAuthenticated(true);
-        
-        // Verifica se o acesso expirou ao carregar
-        const allowed = evaluateAccess(parsed);
-        if (!allowed) {
-          setIsPaymentModalOpen(true);
-        }
-      } catch {
-        localStorage.removeItem("appUser");
-        }
-    }
-  }, []);
-
-  // Listener do Firestore para monitorar expiração em tempo real
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-
-    const userRef = doc(db, 'users', currentUser.uid);
-    
-    const unsubscribe = onSnapshot(
-      userRef,
-      (snapshot) => {
-        if (!snapshot.exists()) return;
-
-        const data = snapshot.data();
-        const updatedUser: AppUser = {
-          uid: currentUser.uid,
-          email: data.email || currentUser.email,
-          fullName: data.fullName || currentUser.fullName,
-          subscriptionStatus: data.subscriptionStatus,
-          trialEndsAt: data.trialEndsAt,
-          accessUntil: data.accessUntil,
-          paymentId: data.paymentId,
-        };
-
-        // Atualiza o usuário no estado
-        setCurrentUser(updatedUser);
-        localStorage.setItem("appUser", JSON.stringify(updatedUser));
-
-        // Verifica se o acesso expirou (trial de 2 dias OU assinatura de 30 dias)
-        const allowed = evaluateAccess(updatedUser);
-        if (!allowed) {
-          // Se expirou, abre o modal de pagamento
-          setIsPaymentModalOpen(true);
-        } else {
-          // Se tem acesso válido, fecha o modal se estiver aberto
-          setIsPaymentModalOpen(false);
-        }
-      },
-      (error) => {
-        console.error('Erro ao escutar atualizações do Firestore:', error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [currentUser?.uid]);
-
-  const handleLogin = (user: AppUser) => {
-    setCurrentUser(user);
-      setIsAuthenticated(true);
-    localStorage.setItem("appUser", JSON.stringify(user));
-
-    const allowed = evaluateAccess(user);
-    if (!allowed) {
-      setIsPaymentModalOpen(true);
-    }
-  };
-
-  const handleSubscriptionUpdated = (updatedUser: AppUser) => {
-    setCurrentUser(updatedUser);
-    localStorage.setItem("appUser", JSON.stringify(updatedUser));
-    // O modal fecha automaticamente após a atualização
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("appUser");
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-    setCurrentUser(null);
-    signOut(auth).catch((err) =>
-      console.error("Erro ao sair do Firebase", err)
-    );
-      // Reset critical states
-    setActiveTab("hairstylist");
-      setHairstylistReport(null);
-      setVisagism360Report(null);
-      setColoristReport(null);
-      setBarberReport(null);
-      setTherapyReport(null);
-  };
-
-  const [activeTab, setActiveTab] = useState<
-    "hairstylist" | "visagism360" | "colorist" | "barber" | "therapy"
-  >("hairstylist");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authScreen, setAuthScreen] = useState<'login' | 'createAccount'>('login');
+  const [activeTab, setActiveTab] = useState<'hairstylist' | 'visagism360' | 'colorist' | 'barber' | 'therapy'>('hairstylist');
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("");
+  const [loadingMessage, setLoadingMessage] = useState('');
   
   // Legacy Analyze Mode State (for saved plans)
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
   const [cuttingPlan, setCuttingPlan] = useState<CuttingPlan | null>(null);
-  const [visagismReport, setVisagismReport] = useState<VisagismReport | null>(
-    null
-  );
+  const [visagismReport, setVisagismReport] = useState<VisagismReport | null>(null);
   const [realisticImage, setRealisticImage] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   // Hairstylist Visagista Mode State
   const [clientPhoto, setClientPhoto] = useState<File | null>(null);
   const [referencePhoto, setReferencePhoto] = useState<File | null>(null);
-  const [hairstylistDescription, setHairstylistDescription] = useState("");
-  const [homeCareBrand, setHomeCareBrand] = useState("Wella Professionals");
-  const [hairstylistReport, setHairstylistReport] = useState<{
-    report: HairstylistReport;
-    simulatedImage: SimulatedTurnaround;
-  } | null>(null);
+  const [hairstylistDescription, setHairstylistDescription] = useState('');
+  const [homeCareBrand, setHomeCareBrand] = useState('Wella Professionals');
+  const [hairstylistReport, setHairstylistReport] = useState<{ report: HairstylistReport, simulatedImage: SimulatedTurnaround } | null>(null);
+
 
   // Colorist Mode State
-  const [clientImageForColor, setClientImageForColor] = useState<File | null>(
-    null
-  );
-  const [coloristReferencePhoto, setColoristReferencePhoto] =
-    useState<File | null>(null);
-  const [coloristDescription, setColoristDescription] = useState("");
-  const [cosmeticsBrand, setCosmeticsBrand] = useState("Wella Professionals");
-  const [coloristReport, setColoristReport] = useState<{
-    report: ColoristReport;
-    tryOnImage: SimulatedTurnaround;
-  } | null>(null);
+  const [clientImageForColor, setClientImageForColor] = useState<File | null>(null);
+  const [coloristReferencePhoto, setColoristReferencePhoto] = useState<File | null>(null);
+  const [coloristDescription, setColoristDescription] = useState('');
+  const [cosmeticsBrand, setCosmeticsBrand] = useState('Wella Professionals');
+  const [coloristReport, setColoristReport] = useState<{ report: ColoristReport, tryOnImage: SimulatedTurnaround } | null>(null);
 
   // Visagism 360 Mode State
   const [visagism360Image, setVisagism360Image] = useState<File | null>(null);
-  const [visagism360Report, setVisagism360Report] =
-    useState<Visagism360Report | null>(null);
+  const [visagism360Report, setVisagism360Report] = useState<Visagism360Report | null>(null);
 
   // Barber Mode State
   const [barberClientPhoto, setBarberClientPhoto] = useState<File | null>(null);
-  const [barberReferencePhoto, setBarberReferencePhoto] = useState<File | null>(
-    null
-  );
-  const [barberDescription, setBarberDescription] = useState("");
-  const [barberReport, setBarberReport] = useState<{
-    report: BarberReport;
-    simulatedImage: SimulatedTurnaround;
-  } | null>(null);
+  const [barberReferencePhoto, setBarberReferencePhoto] = useState<File | null>(null);
+  const [barberDescription, setBarberDescription] = useState('');
+  const [barberReport, setBarberReport] = useState<{ report: BarberReport, simulatedImage: SimulatedTurnaround } | null>(null);
 
   // Hair Therapy Mode State
-  const [therapyClientPhoto, setTherapyClientPhoto] = useState<File | null>(
-    null
-  );
-  const [therapyBrand, setTherapyBrand] = useState("Kérastase");
-  const [therapyDescription, setTherapyDescription] = useState("");
-  const [therapyReport, setTherapyReport] = useState<{
-    report: HairTherapyReport;
-    simulatedImage: SimulatedTurnaround;
-  } | null>(null);
+  const [therapyClientPhoto, setTherapyClientPhoto] = useState<File | null>(null);
+  const [therapyBrand, setTherapyBrand] = useState('Kérastase');
+  const [therapyDescription, setTherapyDescription] = useState('');
+  const [therapyReport, setTherapyReport] = useState<{ report: HairTherapyReport, simulatedImage: SimulatedTurnaround } | null>(null);
+
 
   // Modals & Overlays
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-  const [tutorialType, setTutorialType] = useState<
-    "analyze" | "color-expert" | "visagism-360" | "barber" | "therapy" | null
-  >(null);
+  const [tutorialType, setTutorialType] = useState<'analyze' | 'color-expert' | 'visagism-360' | 'barber' | 'therapy' | null>(null);
   const [isSavedPlansOpen, setIsSavedPlansOpen] = useState(false);
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [isPaymentForced, setIsPaymentForced] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user);
+      setAuthScreen('login');
+      setUserId(user ? user.uid : null);
+
+      if (user) {
+        (async () => {
+          try {
+            const userRef = doc(db, 'users', user.uid);
+            const snap = await getDoc(userRef);
+
+            let data = snap.data();
+            if (!data) {
+              // Usuário antigo sem doc: cria com trial de 48h a partir de agora
+              const trialEndsAt = Date.now() + 48 * 60 * 60 * 1000;
+              await setDoc(userRef, {
+                email: user.email ?? '',
+                fullName: user.displayName ?? '',
+                subscriptionStatus: 'trial',
+                trialEndsAt,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+              data = { subscriptionStatus: 'trial', trialEndsAt };
+            }
+
+            const now = Date.now();
+            const accessUntilValue =
+              typeof data.accessUntil === 'number'
+                ? data.accessUntil
+                : data.accessUntil?.toMillis
+                  ? data.accessUntil.toMillis()
+                  : null;
+            const trialEndsAtValue =
+              typeof data.trialEndsAt === 'number'
+                ? data.trialEndsAt
+                : data.trialEndsAt?.toMillis
+                  ? data.trialEndsAt.toMillis()
+                  : null;
+
+            // Se já assinou mas não tem accessUntil, define 30 dias a partir de agora
+            if (data.subscriptionStatus === 'active' && !accessUntilValue) {
+              const fallbackAccessUntil = now + 30 * 24 * 60 * 60 * 1000;
+              await setDoc(
+                userRef,
+                {
+                  accessUntil: fallbackAccessUntil,
+                  subscriptionStatus: 'active',
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+            }
+
+            const isTrialExpired =
+              data.subscriptionStatus === 'trial' &&
+              !!trialEndsAtValue &&
+              trialEndsAtValue < now;
+
+            const isActiveExpired =
+              data.subscriptionStatus === 'active' &&
+              !!accessUntilValue &&
+              accessUntilValue < now;
+
+            if (isTrialExpired || isActiveExpired) {
+              setIsPaymentModalOpen(true);
+              setIsPaymentForced(true);
+            } else {
+              setIsPaymentForced(false);
+              setIsPaymentModalOpen(false);
+            }
+          } catch (error) {
+            console.error('Erro ao carregar dados de assinatura:', error);
+          }
+        })();
+      } else {
+        setIsPaymentForced(false);
+        setIsPaymentModalOpen(false);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const userRef = doc(db, 'users', userId);
+    const unsubscribe = onSnapshot(userRef, async (snap) => {
+      const now = Date.now();
+      let data = snap.data();
+
+      if (!data) {
+        return;
+      }
+
+      const accessUntilValue =
+        typeof data.accessUntil === 'number'
+          ? data.accessUntil
+          : data.accessUntil?.toMillis
+            ? data.accessUntil.toMillis()
+            : null;
+      const trialEndsAtValue =
+        typeof data.trialEndsAt === 'number'
+          ? data.trialEndsAt
+          : data.trialEndsAt?.toMillis
+            ? data.trialEndsAt.toMillis()
+            : null;
+
+      // Garantia: se status active sem accessUntil, cria 30 dias
+      if (data.subscriptionStatus === 'active' && !accessUntilValue) {
+        const fallbackAccessUntil = now + 30 * 24 * 60 * 60 * 1000;
+        await setDoc(
+          userRef,
+          {
+            accessUntil: fallbackAccessUntil,
+            subscriptionStatus: 'active',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        return;
+      }
+
+      const isTrialExpired =
+        data.subscriptionStatus === 'trial' &&
+        !!trialEndsAtValue &&
+        trialEndsAtValue < now;
+
+      const isActiveExpired =
+        data.subscriptionStatus === 'active' &&
+        !!accessUntilValue &&
+        accessUntilValue < now;
+
+      const mustLock = isTrialExpired || isActiveExpired;
+      setIsPaymentForced(mustLock);
+      setIsPaymentModalOpen(mustLock);
+      if (!mustLock) {
+        setIsPaymentModalOpen(false);
+      }
+    });
+
+    return unsubscribe;
+  }, [userId]);
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+    setAuthScreen('login');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setIsLoggedIn(false);
+      setAuthScreen('login');
+      setIsPaymentForced(false);
+      setIsPaymentModalOpen(false);
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+    }
+  };
+  
   // Function to handle image downloads
   const handleDownloadImage = (imageUrl: string, quality: number) => {
-    const link = document.createElement("a");
+     const link = document.createElement('a');
      link.href = imageUrl;
-    link.download = "imagem-gerada.png";
+     link.download = 'imagem-gerada.png';
      document.body.appendChild(link);
      link.click();
      document.body.removeChild(link);
@@ -270,15 +283,15 @@ export default function App() {
         if (navigator.share && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
-          title: "Resultado Simulado",
-          text: "Veja este resultado incrível!",
+                title: 'Resultado Simulado',
+                text: 'Veja este resultado incrível!'
             });
         } else {
             try {
                 await navigator.clipboard.write([
                     new ClipboardItem({
-              [blob.type]: blob,
-            }),
+                        [blob.type]: blob
+                    })
                 ]);
                  setShareMessage("Imagem copiada para a área de transferência!");
             } catch (e) {
@@ -291,25 +304,23 @@ export default function App() {
        setTimeout(() => setShareMessage(null), 3000);
   };
 
-  const handleGenerateHairstylistReport = async () => {
-    // Verifica acesso antes de gerar
-    if (!evaluateAccess(currentUser)) {
+  // Bloqueia ações se o trial/assinatura expirou
+  const ensureAccess = () => {
+    if (isPaymentForced) {
       setIsPaymentModalOpen(true);
-      return;
+      return false;
     }
-    
+    return true;
+  };
+
+  const handleGenerateHairstylistReport = async () => {
+    if (!ensureAccess()) return;
     // Allows generation if client photo exists AND (reference photo OR text description exists)
-    if (!clientPhoto || (!referencePhoto && !hairstylistDescription.trim()))
-      return;
+    if (!clientPhoto || (!referencePhoto && !hairstylistDescription.trim())) return;
     setIsLoading(true);
     setLoadingMessage("Analisando, simulando resultado e gerando relatório...");
     try {
-      const result = await generateHairstylistReport(
-        clientPhoto,
-        referencePhoto,
-        homeCareBrand,
-        hairstylistDescription
-      );
+        const result = await generateHairstylistReport(clientPhoto, referencePhoto, homeCareBrand, hairstylistDescription);
         setHairstylistReport(result);
     } catch (error) {
         console.error(error);
@@ -320,15 +331,10 @@ export default function App() {
   };
 
   const handleGenerateVisagism360 = async () => {
-      // Verifica acesso antes de gerar
-      if (!evaluateAccess(currentUser)) {
-        setIsPaymentModalOpen(true);
-        return;
-      }
-      
+      if (!ensureAccess()) return;
       if (!visagism360Image) return;
       setIsLoading(true);
-      setLoadingMessage("Gerando análise, diagramas e simulações de imagem...");
+      setLoadingMessage("Realizando Análise Visagismo 360°...");
       try {
           const result = await generateVisagism360Report(visagism360Image);
           setVisagism360Report(result);
@@ -341,23 +347,14 @@ export default function App() {
   };
 
   const handleGenerateBarber = async () => {
-      // Verifica acesso antes de gerar
-      if (!evaluateAccess(currentUser)) {
-        setIsPaymentModalOpen(true);
-        return;
-      }
-      
+      if (!ensureAccess()) return;
       if (!barberClientPhoto) return;
       setIsLoading(true);
       setLoadingMessage("Consultando o Barbeiro Visagista...");
       try {
-      const result = await generateBarberReport(
-        barberClientPhoto,
-        barberReferencePhoto,
-        barberDescription
-      );
+          const result = await generateBarberReport(barberClientPhoto, barberReferencePhoto, barberDescription); 
           setBarberReport(result);
-    } catch (e) {
+      } catch(e) {
           console.error(e);
           alert("Erro ao gerar relatório de barbeiro.");
       } finally {
@@ -366,23 +363,14 @@ export default function App() {
   };
 
   const handleGenerateTherapy = async () => {
-      // Verifica acesso antes de gerar
-      if (!evaluateAccess(currentUser)) {
-        setIsPaymentModalOpen(true);
-        return;
-      }
-      
+      if (!ensureAccess()) return;
       if (!therapyClientPhoto) return;
       setIsLoading(true);
       setLoadingMessage("Analisando saúde capilar e criando cronograma...");
       try {
-      const result = await generateHairTherapyReport(
-        therapyClientPhoto,
-        therapyBrand,
-        therapyDescription
-      );
+          const result = await generateHairTherapyReport(therapyClientPhoto, therapyBrand, therapyDescription);
           setTherapyReport(result);
-    } catch (e) {
+      } catch(e) {
           console.error(e);
           alert("Erro ao gerar análise terapêutica.");
       } finally {
@@ -390,22 +378,38 @@ export default function App() {
       }
   };
 
-  // Se não autenticado, mostra tela de login/cadastro
-  if (!isAuthenticated) {
-      return <AuthScreen onLogin={handleLogin} />;
+  if (!isLoggedIn) {
+    if (authScreen === 'login') {
+      return (
+        <LoginScreen
+          onLogin={handleLogin}
+          onNavigateToCreateAccount={() => setAuthScreen('createAccount')}
+        />
+      );
+    } else { // authScreen === 'createAccount'
+      return (
+        <CreateAccountScreen
+          onAccountCreated={handleLogin} // For now, creating an account logs you in
+          onNavigateToLogin={() => setAuthScreen('login')}
+        />
+      );
+    }
   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col">
       <Header 
         onShowSavedPlans={() => setIsSavedPlansOpen(true)}
-        onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+        onOpenPaymentModal={() => {
+          setIsPaymentForced(false);
+          setIsPaymentModalOpen(true);
+        }}
         onStartTutorial={() => { 
-          if (activeTab === "hairstylist") setTutorialType("analyze");
-          else if (activeTab === "colorist") setTutorialType("color-expert");
-          else if (activeTab === "visagism360") setTutorialType("visagism-360");
-          else if (activeTab === "barber") setTutorialType("barber");
-          else if (activeTab === "therapy") setTutorialType("therapy");
+            if (activeTab === 'hairstylist') setTutorialType('analyze');
+            else if (activeTab === 'colorist') setTutorialType('color-expert');
+            else if (activeTab === 'visagism360') setTutorialType('visagism-360');
+            else if (activeTab === 'barber') setTutorialType('barber');
+            else if (activeTab === 'therapy') setTutorialType('therapy');
             
             setTutorialStep(0); 
             setIsTutorialOpen(true); 
@@ -427,80 +431,55 @@ export default function App() {
         canUndo={false}
         canRedo={false}
         onLogout={handleLogout}
-        isAdmin={isAdmin}
       />
       
       <main className="flex-grow container mx-auto p-4 flex flex-col lg:flex-row gap-4">
         <div className="w-full lg:w-2/3 flex flex-col gap-4">
              <div className="flex space-x-2 bg-gray-800 p-2 rounded-xl shrink-0 overflow-x-auto">
                 <button 
-              onClick={() => setActiveTab("hairstylist")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === "hairstylist"
-                  ? "bg-emerald-600 text-white"
-                  : "text-gray-400 hover:bg-gray-700"
-              }`}
+                    onClick={() => setActiveTab('hairstylist')} 
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'hairstylist' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                 >
                     Hairstylist Visagista
                 </button>
                  <button 
-              onClick={() => setActiveTab("visagism360")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === "visagism360"
-                  ? "bg-purple-600 text-white"
-                  : "text-gray-400 hover:bg-gray-700"
-              }`}
+                    onClick={() => setActiveTab('visagism360')} 
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'visagism360' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                 >
                     Visagismo 360°
                 </button>
                  <button 
-              onClick={() => setActiveTab("colorist")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === "colorist"
-                  ? "bg-emerald-600 text-white"
-                  : "text-gray-400 hover:bg-gray-700"
-              }`}
+                    onClick={() => setActiveTab('colorist')} 
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'colorist' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                 >
                     Colorista Expert
                 </button>
                 <button 
-              onClick={() => setActiveTab("barber")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === "barber"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-400 hover:bg-gray-700"
-              }`}
+                    onClick={() => setActiveTab('barber')} 
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'barber' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                 >
                     Barbeiro Visagista
                 </button>
                 <button 
-              onClick={() => setActiveTab("therapy")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === "therapy"
-                  ? "bg-cyan-600 text-white"
-                  : "text-gray-400 hover:bg-gray-700"
-              }`}
+                    onClick={() => setActiveTab('therapy')} 
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'therapy' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                 >
                     Terapeuta Capilar
                 </button>
              </div>
              
              <div className="flex-grow bg-gray-800 rounded-2xl overflow-hidden relative min-h-[600px]">
-            {activeTab === "hairstylist" &&
-              (hairstylistReport ? (
+                {activeTab === 'hairstylist' && (
+                     hairstylistReport ? (
                         <HairstylistReportDisplay
                             reportData={hairstylistReport}
-                  clientImage={
-                    clientPhoto ? URL.createObjectURL(clientPhoto) : ""
-                  }
-                  referenceImage={
-                    referencePhoto ? URL.createObjectURL(referencePhoto) : ""
-                  }
+                            clientImage={clientPhoto ? URL.createObjectURL(clientPhoto) : ''}
+                            referenceImage={referencePhoto ? URL.createObjectURL(referencePhoto) : ''}
                             onReset={() => {
                                 setHairstylistReport(null);
                                 setClientPhoto(null);
                                 setReferencePhoto(null);
-                    setHairstylistDescription("");
+                                setHairstylistDescription('');
                             }}
                             setIsLoading={setIsLoading}
                             setLoadingMessage={setLoadingMessage}
@@ -509,33 +488,22 @@ export default function App() {
                      ) : (
                         <div className="p-6">
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]"
-                      id="image-uploader-container"
-                    >
-                      <h3 className="text-lg font-semibold mb-4 text-emerald-300">
-                        1. Foto da Cliente
-                      </h3>
+                               <div className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]" id="image-uploader-container">
+                                   <h3 className="text-lg font-semibold mb-4 text-emerald-300">1. Foto da Cliente</h3>
                                    <div className="flex-grow">
                                        <ImageInput onImageUpload={setClientPhoto} />
                                    </div>
                                </div>
                                <div className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]">
-                      <h3 className="text-lg font-semibold mb-2 text-emerald-300">
-                        2. Estilo Desejado
-                      </h3>
-                      <p className="text-xs text-gray-400 mb-2">
-                        Envie uma foto de referência E/OU descreva o corte.
-                      </p>
+                                   <h3 className="text-lg font-semibold mb-2 text-emerald-300">2. Estilo Desejado</h3>
+                                   <p className="text-xs text-gray-400 mb-2">Envie uma foto de referência E/OU descreva o corte.</p>
                                    <div className="h-64 mb-4">
                                        <ImageInput onImageUpload={setReferencePhoto} />
                                    </div>
                                    <textarea 
                                         placeholder="Descreva o estilo do corte (ex: Long Bob repicado com franja...)"
                                         value={hairstylistDescription}
-                        onChange={(e) =>
-                          setHairstylistDescription(e.target.value)
-                        }
+                                        onChange={(e) => setHairstylistDescription(e.target.value)}
                                         className="w-full bg-gray-900 rounded-lg p-3 text-white border border-gray-600 focus:border-emerald-500 focus:outline-none resize-none flex-grow"
                                    />
                                </div>
@@ -549,33 +517,27 @@ export default function App() {
                                     <option>Wella Professionals</option>
                                     <option>L'Oréal Professionnel</option>
                                     <option>Schwarzkopf Professional</option>
+                                    <option>Keune</option>
                                     <option>Truss</option>
                                     <option>Braé</option>
-                                    <option>Keune</option>
                                 </select>
                                 <button 
                                     onClick={handleGenerateHairstylistReport}
-                      disabled={
-                        !clientPhoto ||
-                        (!referencePhoto && !hairstylistDescription.trim())
-                      }
+                                    disabled={!clientPhoto || (!referencePhoto && !hairstylistDescription.trim())}
                                     className="px-8 py-3 bg-emerald-600 text-white rounded-lg font-bold text-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Gerar Análise Visagista
                                 </button>
                            </div>
                         </div>
-              ))}
+                     )
+                )}
 
-            {activeTab === "visagism360" &&
-              (visagism360Report ? (
+                {activeTab === 'visagism360' && (
+                    visagism360Report ? (
                         <Visagism360Display 
                             report={visagism360Report}
-                  clientImage={
-                    visagism360Image
-                      ? URL.createObjectURL(visagism360Image)
-                      : ""
-                  }
+                            clientImage={visagism360Image ? URL.createObjectURL(visagism360Image) : ''}
                             onReset={() => {
                                 setVisagism360Report(null);
                                 setVisagism360Image(null);
@@ -586,21 +548,11 @@ export default function App() {
                     ) : (
                         <div className="p-6 flex flex-col h-full">
                             <div className="flex-grow flex flex-col justify-center max-w-2xl mx-auto w-full">
-                    <h2 className="text-2xl font-bold text-center mb-2 text-purple-300">
-                      Visagismo 360°
-                    </h2>
-                    <p className="text-gray-400 text-center mb-8">
-                      Análise facial completa, colorimetria pessoal e sugestões
-                      de corte em um clique.
-                    </p>
-
-                    <div
-                      id="visagism-upload-container"
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col h-[500px]"
-                    >
-                      <h3 className="text-lg font-semibold mb-4 text-purple-300">
-                        Foto da Cliente (Rosto bem iluminado)
-                      </h3>
+                                <h2 className="text-2xl font-bold text-center mb-2 text-purple-300">Visagismo 360°</h2>
+                                <p className="text-gray-400 text-center mb-8">Análise facial completa, colorimetria pessoal e sugestões de corte em um clique.</p>
+                                
+                                <div id="visagism-upload-container" className="bg-gray-700/30 rounded-xl p-4 flex flex-col h-[500px]">
+                                    <h3 className="text-lg font-semibold mb-4 text-purple-300">Foto da Cliente (Rosto bem iluminado)</h3>
                                     <div className="flex-grow">
                                         <ImageInput onImageUpload={setVisagism360Image} />
                                     </div>
@@ -618,25 +570,18 @@ export default function App() {
                                 </div>
                             </div>
                         </div>
-              ))}
+                    )
+                )}
 
-            {activeTab === "colorist" &&
-              (coloristReport ? (
+                {activeTab === 'colorist' && (
+                     coloristReport ? (
                         <ColoristReportDisplay 
-                  reportData={{
-                    report: coloristReport.report,
-                    tryOnImage: coloristReport.tryOnImage,
-                  }}
-                  clientImage={
-                    clientImageForColor
-                      ? URL.createObjectURL(clientImageForColor)
-                      : ""
-                  }
+                            reportData={{ report: coloristReport.report, tryOnImage: coloristReport.tryOnImage.front }} 
+                            clientImage={clientImageForColor ? URL.createObjectURL(clientImageForColor) : ''}
                             onReset={() => {
                                 setColoristReport(null);
-                    setColoristDescription("");
+                                setColoristDescription('');
                                 setColoristReferencePhoto(null);
-                                setClientImageForColor(null);
                             }}
                             setIsLoading={setIsLoading}
                             setLoadingMessage={setLoadingMessage}
@@ -645,40 +590,26 @@ export default function App() {
                      ) : (
                         <div className="p-6">
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]"
-                      id="colorist-client-photo-container"
-                    >
-                      <h3 className="text-lg font-semibold mb-4 text-emerald-300">
-                        1. Foto da Cliente
-                      </h3>
+                                <div className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[400px]" id="colorist-client-photo-container">
+                                    <h3 className="text-lg font-semibold mb-4 text-emerald-300">1. Foto da Cliente</h3>
                                     <div className="flex-grow">
-                                        <ImageInput onImageUpload={setClientImageForColor} />
+                                        <ImageUploader onImageUpload={setClientImageForColor} />
                                     </div>
+                                    {clientImageForColor && <p className="text-sm text-green-400 mt-2 text-center">Foto carregada!</p>}
                                 </div>
-                    <div
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]"
-                      id="colorist-inspiration-container"
-                    >
-                      <h3 className="text-lg font-semibold mb-2 text-emerald-300">
-                        2. Inspiração de Cor
-                      </h3>
-                      <p className="text-xs text-gray-400 mb-2">
-                        Envie uma referência E/OU descreva a cor.
-                      </p>
+                                <div className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[400px]" id="colorist-inspiration-container">
+                                    <h3 className="text-lg font-semibold mb-2 text-emerald-300">2. Inspiração de Cor</h3>
+                                    <p className="text-xs text-gray-400 mb-2">Envie uma referência E/OU descreva a cor.</p>
                                     <div className="flex-grow flex flex-col gap-4">
-                                        <div className="h-64 mb-4">
-                          <ImageInput
-                            onImageUpload={setColoristReferencePhoto}
-                          />
+                                        <div className="flex-grow min-h-[200px]">
+                                            <ImageUploader onImageUpload={setColoristReferencePhoto} />
                                         </div>
                                         <textarea 
                                             placeholder="Descreva a cor e técnica desejada (ex: Morena iluminada em tons de mel...)"
+                                            rows={3}
                                             value={coloristDescription}
-                                            className="w-full bg-gray-900 rounded-lg p-3 text-white border border-gray-600 focus:border-emerald-500 focus:outline-none resize-none flex-grow"
-                          onChange={(e) =>
-                            setColoristDescription(e.target.value)
-                          }
+                                            className="w-full bg-gray-900 rounded-lg p-3 text-white border border-gray-600 focus:border-emerald-500 focus:outline-none resize-none"
+                                            onChange={(e) => setColoristDescription(e.target.value)}
                                         />
                                     </div>
                                 </div>
@@ -693,77 +624,50 @@ export default function App() {
                                     <option>Wella Professionals</option>
                                     <option>L'Oréal Professionnel</option>
                                     <option>Schwarzkopf Professional</option>
+                                    <option>Keune</option>
                                     <option>Truss</option>
                                     <option>Braé</option>
-                                    <option>Keune</option>
                                 </select>
                                 <button 
                                     id="colorist-generate-button"
                                     onClick={async () => {
-                        // Verifica acesso antes de gerar
-                        if (!evaluateAccess(currentUser)) {
-                          setIsPaymentModalOpen(true);
-                          return;
-                        }
-                        
-                        if (
-                          !clientImageForColor ||
-                          (!coloristReferencePhoto &&
-                            !coloristDescription.trim())
-                        )
-                          return;
+                                        if (!ensureAccess()) return;
+                                        if (!clientImageForColor || (!coloristReferencePhoto && !coloristDescription.trim())) return;
                                         
                                         setIsLoading(true);
-                        setLoadingMessage(
-                          "Gerando relatório de colorimetria expert..."
-                        );
-                        try {
-                          const result = await generateColoristReport(
-                            clientImageForColor,
-                            coloristReferencePhoto,
-                            coloristDescription,
-                            cosmeticsBrand
-                          );
+                                        setLoadingMessage("Gerando relatório de colorimetria expert...");
+                                        try {
+                                            const result = await generateColoristReport(clientImageForColor, coloristReferencePhoto, coloristDescription, cosmeticsBrand);
                                             setColoristReport(result);
-                        } catch (e) {
+                                        } catch(e) {
                                             console.error(e);
                                             alert("Erro ao gerar relatório.");
                                         } finally {
                                             setIsLoading(false);
                                         }
                                     }}
-                      disabled={
-                        !clientImageForColor ||
-                        (!coloristReferencePhoto && !coloristDescription.trim())
-                      }
+                                    disabled={!clientImageForColor || (!coloristReferencePhoto && !coloristDescription.trim())}
                                     className="px-8 py-3 bg-emerald-600 text-white rounded-lg font-bold text-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Gerar Análise Colorista
                                 </button>
                            </div>
                         </div>
-              ))}
+                     )
+                )}
 
-            {activeTab === "barber" &&
-              (barberReport ? (
+                {activeTab === 'barber' && (
+                    barberReport ? (
                         <BarberReportDisplay 
                             report={barberReport.report}
-                  clientImage={
-                    barberClientPhoto
-                      ? URL.createObjectURL(barberClientPhoto)
-                      : ""
-                  }
-                  referenceImage={
-                    barberReferencePhoto
-                      ? URL.createObjectURL(barberReferencePhoto)
-                      : ""
-                  }
-                            simulatedImage={barberReport.simulatedImage}
+                            clientImage={barberClientPhoto ? URL.createObjectURL(barberClientPhoto) : ''}
+                            referenceImage={barberReferencePhoto ? URL.createObjectURL(barberReferencePhoto) : ''}
+                            simulatedImage={barberReport.simulatedImage.front}
                             onReset={() => {
                                 setBarberReport(null);
                                 setBarberClientPhoto(null);
                                 setBarberReferencePhoto(null);
-                    setBarberDescription("");
+                                setBarberDescription('');
                             }}
                             setIsLoading={setIsLoading}
                             setLoadingMessage={setLoadingMessage}
@@ -772,27 +676,15 @@ export default function App() {
                     ) : (
                         <div className="p-6">
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div
-                      id="barber-upload-client"
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]"
-                    >
-                      <h3 className="text-lg font-semibold mb-4 text-blue-300">
-                        1. Foto do Cliente
-                      </h3>
+                               <div id="barber-upload-client" className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]">
+                                   <h3 className="text-lg font-semibold mb-4 text-blue-300">1. Foto do Cliente</h3>
                                    <div className="flex-grow">
                                        <ImageInput onImageUpload={setBarberClientPhoto} />
                                    </div>
                                </div>
-                    <div
-                      id="barber-upload-ref"
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]"
-                    >
-                      <h3 className="text-lg font-semibold mb-2 text-blue-300">
-                        2. Estilo Desejado (Opcional)
-                      </h3>
-                      <p className="text-xs text-gray-400 mb-2">
-                        Envie referência ou descreva o corte/barba.
-                      </p>
+                               <div id="barber-upload-ref" className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[450px]">
+                                   <h3 className="text-lg font-semibold mb-2 text-blue-300">2. Estilo Desejado (Opcional)</h3>
+                                   <p className="text-xs text-gray-400 mb-2">Envie referência ou descreva o corte/barba.</p>
                                    <div className="h-64 mb-4">
                                        <ImageInput onImageUpload={setBarberReferencePhoto} />
                                    </div>
@@ -815,22 +707,19 @@ export default function App() {
                                 </button>
                            </div>
                         </div>
-              ))}
+                    )
+                )}
 
-            {activeTab === "therapy" &&
-              (therapyReport ? (
+                {activeTab === 'therapy' && (
+                    therapyReport ? (
                         <HairTherapyReportDisplay 
                             report={therapyReport.report}
-                  clientImage={
-                    therapyClientPhoto
-                      ? URL.createObjectURL(therapyClientPhoto)
-                      : ""
-                  }
+                            clientImage={therapyClientPhoto ? URL.createObjectURL(therapyClientPhoto) : ''}
                             simulatedImage={therapyReport.simulatedImage}
                             onReset={() => {
                                 setTherapyReport(null);
                                 setTherapyClientPhoto(null);
-                    setTherapyDescription("");
+                                setTherapyDescription('');
                             }}
                             setIsLoading={setIsLoading}
                             setLoadingMessage={setLoadingMessage}
@@ -839,25 +728,15 @@ export default function App() {
                     ) : (
                         <div className="p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div
-                      id="therapy-upload-container"
-                      className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[400px]"
-                    >
-                      <h3 className="text-lg font-semibold mb-4 text-cyan-300">
-                        1. Foto do Cabelo (Foco nos fios)
-                      </h3>
+                                <div id="therapy-upload-container" className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[400px]">
+                                    <h3 className="text-lg font-semibold mb-4 text-cyan-300">1. Foto do Cabelo (Foco nos fios)</h3>
                                     <div className="flex-grow">
                                         <ImageInput onImageUpload={setTherapyClientPhoto} />
                                     </div>
                                 </div>
                                 <div className="bg-gray-700/30 rounded-xl p-4 flex flex-col min-h-[400px]">
-                      <h3 className="text-lg font-semibold mb-4 text-cyan-300">
-                        2. Relato do Problema (Opcional)
-                      </h3>
-                      <p className="text-xs text-gray-400 mb-2">
-                        Descreva o que incomoda (queda, ressecamento, quebra,
-                        etc).
-                      </p>
+                                     <h3 className="text-lg font-semibold mb-4 text-cyan-300">2. Relato do Problema (Opcional)</h3>
+                                     <p className="text-xs text-gray-400 mb-2">Descreva o que incomoda (queda, ressecamento, quebra, etc).</p>
                                      <textarea 
                                         placeholder="Ex: Meu cabelo está muito seco nas pontas e quebrando fácil..."
                                         value={therapyDescription}
@@ -869,9 +748,7 @@ export default function App() {
 
                             <div className="mt-6 flex flex-col items-center gap-4">
                                 <div className="w-full max-w-sm">
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Marca Preferida para Tratamento:
-                      </label>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Marca Preferida para Tratamento:</label>
                                     <select 
                                         value={therapyBrand} 
                                         onChange={(e) => setTherapyBrand(e.target.value)}
@@ -882,10 +759,10 @@ export default function App() {
                                         <option>Redken</option>
                                         <option>Davines</option>
                                         <option>Wella Professionals</option>
+                                        <option>Keune</option>
                                         <option>Truss</option>
                                         <option>Joico</option>
                                         <option>Braé</option>
-                                        <option>Keune</option>
                                     </select>
                                 </div>
 
@@ -899,14 +776,12 @@ export default function App() {
                                 </button>
                             </div>
                         </div>
-              ))}
+                    )
+                )}
              </div>
         </div>
 
-        <div
-          className="w-full lg:w-1/3 flex flex-col gap-4 lg:h-[calc(100vh-112px)] lg:sticky lg:top-[96px]"
-          id="chat-panel-container"
-        >
+        <div className="w-full lg:w-1/3 flex flex-col gap-4 lg:h-[calc(100vh-112px)] lg:sticky lg:top-[96px]" id="chat-panel-container">
             <div className="flex-grow bg-gray-800 rounded-2xl overflow-hidden shadow-lg border border-gray-700">
                 <ChatPanel />
             </div>
@@ -923,7 +798,7 @@ export default function App() {
       {isTutorialOpen && (
         <TutorialOverlay 
             step={tutorialStep} 
-          onNext={() => setTutorialStep((p) => p + 1)}
+            onNext={() => setTutorialStep(p => p + 1)} 
             onSkip={() => setIsTutorialOpen(false)}
             tutorialType={tutorialType}
         />
@@ -934,33 +809,23 @@ export default function App() {
         onClose={() => setIsSavedPlansOpen(false)}
         plans={savedPlans}
         onLoadPlan={(id) => {
-          const plan = savedPlans.find((p) => p.id === id);
+             const plan = savedPlans.find(p => p.id === id);
              if (plan) {
-            alert(
-              "Carregar planos antigos ainda não é totalmente suportado na nova interface."
-            );
+                 alert("Carregar planos antigos ainda não é totalmente suportado na nova interface.");
                  setIsSavedPlansOpen(false);
              }
         }}
         onDeletePlan={(id) => {
-          const updated = savedPlans.filter((p) => p.id !== id);
+            const updated = savedPlans.filter(p => p.id !== id);
             setSavedPlans(updated);
-          localStorage.setItem("savedPlans", JSON.stringify(updated));
+            localStorage.setItem('savedPlans', JSON.stringify(updated));
         }}
       />
 
-      <PaymentModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => {
-          // Só permite fechar se o acesso não expirou
-          const hasAccess = evaluateAccess(currentUser);
-          if (hasAccess) {
-            setIsPaymentModalOpen(false);
-          }
-        }}
-        user={currentUser}
-        onSubscriptionUpdated={handleSubscriptionUpdated}
-        isAccessExpired={!evaluateAccess(currentUser)}
+      <PaymentModal 
+        isOpen={isPaymentModalOpen} 
+        isForced={isPaymentForced}
+        onClose={isPaymentForced ? () => {} : () => setIsPaymentModalOpen(false)} 
       />
       <CatalogModal 
         isOpen={isCatalogOpen} 

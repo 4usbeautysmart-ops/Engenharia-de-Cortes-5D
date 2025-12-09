@@ -51,8 +51,8 @@ export interface BarberReport {
 
 export interface Visagism360Report {
   faceShape: string;
-  analysis: string; // Análise Psicológica
-  physicalFeatures: string; // Características Físicas
+  analysis: string;
+  physicalFeatures: string;
   colorimetry: {
     season: string;
     characteristics: string;
@@ -61,15 +61,9 @@ export interface Visagism360Report {
   styles: Array<{
     name: string;
     description: string;
-    harmonyPoints: string[];
-    tensionPoints: string[];
+    reason: string;
     technicalDetails: string;
     stylingTips: string;
-    diagrams: Array<{
-      title: string;
-      svg: string;
-    }>;
-    simulatedImage?: string; // New field for the generated image
   }>;
 }
 

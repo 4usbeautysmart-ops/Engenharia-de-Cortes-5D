@@ -13,8 +13,7 @@ interface HeaderProps {
     onRedo: () => void;
     canUndo: boolean;
     canRedo: boolean;
-    onLogout?: () => void;
-    isAdmin?: boolean;
+    onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -27,8 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
     onRedo,
     canUndo,
     canRedo,
-    onLogout,
-    isAdmin = false
+    onLogout
 }) => {
   return (
     <header className="p-4 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-10">
@@ -83,31 +81,21 @@ export const Header: React.FC<HeaderProps> = ({
               <Icon name="save" className="w-5 h-5" />
               Planos Salvos
             </button>
-            
-            {isAdmin ? (
-                <div className="flex items-center gap-2 px-4 py-2 bg-purple-900/50 border border-purple-500/50 rounded-lg text-sm font-bold text-purple-200">
-                    <Icon name="consultant" className="w-5 h-5" />
-                    Acesso Admin
-                </div>
-            ) : (
-                <button 
-                  onClick={onOpenPaymentModal}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-500/80 rounded-lg text-sm font-bold text-white hover:bg-amber-500 transition-colors shadow-md shadow-amber-500/20"
-                >
-                  <Icon name="credit-card" className="w-5 h-5" />
-                  Seja Premium
-                </button>
-            )}
-
-            {onLogout && (
-                <button
-                    onClick={onLogout}
-                    className="p-2 bg-gray-700/80 rounded-lg text-red-400 hover:bg-red-900/50 transition-colors border border-transparent hover:border-red-500/50"
-                    title="Sair"
-                >
-                    <Icon name="close" className="w-5 h-5" />
-                </button>
-            )}
+            <button 
+              onClick={onOpenPaymentModal}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500/80 rounded-lg text-sm font-bold text-white hover:bg-amber-500 transition-colors shadow-md shadow-amber-500/20"
+            >
+              <Icon name="credit-card" className="w-5 h-5" />
+              Seja Premium
+            </button>
+            <button 
+              onClick={onLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-700/80 rounded-lg text-sm font-medium text-gray-200 hover:bg-red-600 transition-colors"
+              title="Sair do Aplicativo"
+            >
+              <Icon name="logout" className="w-5 h-5" />
+              Sair
+            </button>
         </div>
       </div>
     </header>

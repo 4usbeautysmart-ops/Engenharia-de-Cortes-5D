@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { HairstylistReport } from '../types';
 import { Icon } from './Icon';
 import { TurnaroundView } from './TurnaroundView';
-import { generateHairstylistPdf } from '../utils/pdfGenerator';
 
 interface HairstylistReportDisplayProps {
   reportData: { report: HairstylistReport; simulatedImage: any };
@@ -42,39 +41,8 @@ export const HairstylistReportDisplay: React.FC<HairstylistReportDisplayProps> =
   const diagramsContainerRef = useRef<HTMLDivElement>(null);
 
   const handleShare = async () => {
-    setIsLoading(true);
-    setLoadingMessage('Gerando dossiê completo...');
-    setShareMessage(null);
-    try {
-      const pdfBlob = await generateHairstylistPdf(reportData, clientImage, referenceImage);
-      const pdfFile = new File([pdfBlob], 'dossie-hairstylist-visagista.pdf', { type: 'application/pdf' });
-      
-      if (navigator.share && navigator.canShare({ files: [pdfFile] })) {
-        await navigator.share({
-          title: 'Análise Hairstylist Visagista',
-          text: `Confira o plano de corte para ${report.cuttingPlan.styleName}.`,
-          files: [pdfFile],
-        });
-      } else {
-        // Fallback to download
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdfBlob);
-        link.download = `dossie-${report.cuttingPlan.styleName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-        setShareMessage("PDF baixado com sucesso!");
-      }
-    } catch (err) {
-       console.error("PDF generation/sharing failed:", err);
-       if ((err as Error).name !== 'AbortError') {
-         setShareMessage('Ocorreu um erro ao gerar ou compartilhar o PDF.');
-       }
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => setShareMessage(null), 4000);
-    }
+    setShareMessage('Funcionalidade de compartilhamento em desenvolvimento.');
+    setTimeout(() => setShareMessage(null), 3000);
   };
 
   useEffect(() => {

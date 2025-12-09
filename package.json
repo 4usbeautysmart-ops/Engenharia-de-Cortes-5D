@@ -1,5 +1,5 @@
 {
-  "name": "engenharia-de-cortes-5d-oficial",
+  "name": "engenharia-de-cortes-5d-oficial-2",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.29.1",
-    "firebase": "^11.0.0",
+    "@google/genai": "^1.32.0",
+    "firebase": "^12.6.0",
     "mercadopago": "^2.11.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

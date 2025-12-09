@@ -1,5 +1,5 @@
 {
-  "name": "Engenharia de Cortes 5D Oficial",
+  "name": "Engenharia de Cortes 5D Oficial 2",
   "description": "An advanced application for hairstylists that generates complete, multi-dimensional haircutting plans from a reference photo, including step-by-step guides, diagrams, 3D visualizations, and realistic final images.",
   "requestFramePermissions": [
     "camera",

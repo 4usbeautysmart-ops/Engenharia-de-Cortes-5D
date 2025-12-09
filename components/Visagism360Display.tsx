@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import type { Visagism360Report } from '../types';
 import { Icon } from './Icon';
@@ -15,7 +14,7 @@ interface Visagism360DisplayProps {
 }
 
 const StyleCard: React.FC<{ style: Visagism360Report['styles'][0]; index: number }> = ({ style, index }) => {
-    const [activeTab, setActiveTab] = useState<'simulation' | 'overview' | 'technical' | 'styling'>(style.simulatedImage ? 'simulation' : 'overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'technical' | 'styling'>('overview');
 
     return (
         <div className="bg-gray-800/80 rounded-xl border border-purple-500/30 overflow-hidden hover:border-purple-500/60 transition-colors shadow-lg shadow-purple-900/10">
@@ -29,14 +28,6 @@ const StyleCard: React.FC<{ style: Visagism360Report['styles'][0]; index: number
 
             {/* Abas de Navegação */}
             <div className="flex border-b border-gray-700">
-                {style.simulatedImage && (
-                    <button 
-                        onClick={() => setActiveTab('simulation')}
-                        className={`flex-1 py-2 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'simulation' ? 'bg-pink-500/10 text-pink-300 border-b-2 border-pink-500' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'}`}
-                    >
-                        Simulação (IA)
-                    </button>
-                )}
                 <button 
                     onClick={() => setActiveTab('overview')}
                     className={`flex-1 py-2 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'overview' ? 'bg-purple-500/10 text-purple-300 border-b-2 border-purple-500' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'}`}
@@ -59,35 +50,15 @@ const StyleCard: React.FC<{ style: Visagism360Report['styles'][0]; index: number
 
             {/* Conteúdo do Card */}
             <div className="p-4 min-h-[180px]">
-                {activeTab === 'simulation' && style.simulatedImage && (
-                    <div className="animate-fade-in">
-                        <ZoomableImage src={style.simulatedImage} alt={`Simulação para ${style.name}`} />
-                    </div>
-                )}
                 {activeTab === 'overview' && (
-                    <div className="space-y-4 animate-fade-in">
+                    <div className="space-y-3 animate-fade-in">
                         <p className="text-gray-300 text-sm leading-relaxed">{style.description}</p>
-                        
-                        {/* Harmony Points */}
-                        <div className="bg-emerald-900/20 p-3 rounded-lg border border-emerald-500/20">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Icon name="check" className="w-4 h-4 text-emerald-400" />
-                                <span className="text-xs font-bold text-emerald-300 uppercase">Pontos de Harmonia</span>
+                        <div className="bg-purple-900/20 p-3 rounded-lg border border-purple-500/20 mt-2">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Icon name="check" className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs font-bold text-purple-300 uppercase">Por que funciona?</span>
                             </div>
-                            <ul className="list-disc list-inside space-y-1 text-xs text-gray-300">
-                                {style.harmonyPoints.map((point, i) => <li key={i}>{point}</li>)}
-                            </ul>
-                        </div>
-
-                        {/* Tension Points */}
-                        <div className="bg-amber-900/20 p-3 rounded-lg border border-amber-500/20">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Icon name="warning" className="w-4 h-4 text-amber-400" />
-                                <span className="text-xs font-bold text-amber-300 uppercase">Pontos de Tensão (Atenção)</span>
-                            </div>
-                            <ul className="list-disc list-inside space-y-1 text-xs text-gray-300">
-                                {style.tensionPoints.map((point, i) => <li key={i}>{point}</li>)}
-                            </ul>
+                            <p className="text-xs text-gray-400 italic">{style.reason}</p>
                         </div>
                     </div>
                 )}
@@ -172,10 +143,6 @@ export const Visagism360Display: React.FC<Visagism360DisplayProps> = ({
       setTimeout(() => setShareMessage(null), 4000);
     }
   };
-  
-  // Robustly filter for valid hex colors before rendering
-  const validColors = (report?.colorimetry?.bestColors || [])
-    .filter(color => typeof color === 'string' && /^#([0-9A-Fa-f]{3}){1,2}$/.test(color));
 
   return (
     <div className="bg-gray-800 rounded-2xl p-6 h-full flex flex-col">
@@ -250,25 +217,21 @@ export const Visagism360Display: React.FC<Visagism360DisplayProps> = ({
                  <div className="flex flex-col gap-3">
                      <span className="text-sm text-gray-300 font-semibold">Paleta Sugerida (Clique para copiar):</span>
                      <div className="flex flex-wrap gap-4 justify-center py-4 bg-gray-800 rounded-xl border border-gray-700 shadow-inner">
-                        {validColors.length > 0 ? (
-                            validColors.map((color, idx) => (
-                                <button 
-                                    key={idx} 
-                                    onClick={() => handleCopyColor(color)}
-                                    className="group relative flex flex-col items-center gap-2 focus:outline-none"
-                                >
-                                    <div 
-                                        className="w-14 h-14 rounded-full border-4 border-gray-700 shadow-lg transition-transform duration-200 group-hover:scale-110 group-hover:border-white ring-2 ring-transparent group-hover:ring-pink-400" 
-                                        style={{ backgroundColor: color }}
-                                    ></div>
-                                    <span className={`text-[10px] font-mono transition-colors ${copiedColor === color ? 'text-green-400 font-bold' : 'text-gray-500 group-hover:text-white'}`}>
-                                        {copiedColor === color ? 'Copiado!' : color}
-                                    </span>
-                                </button>
-                            ))
-                        ) : (
-                           <p className="text-gray-500 text-sm py-4">Não foi possível gerar a paleta de cores.</p>
-                        )}
+                        {report.colorimetry.bestColors.map((color, idx) => (
+                            <button 
+                                key={idx} 
+                                onClick={() => handleCopyColor(color)}
+                                className="group relative flex flex-col items-center gap-2 focus:outline-none"
+                            >
+                                <div 
+                                    className="w-14 h-14 rounded-full border-4 border-gray-700 shadow-lg transition-transform duration-200 group-hover:scale-110 group-hover:border-white ring-2 ring-transparent group-hover:ring-pink-400" 
+                                    style={{ backgroundColor: color }}
+                                ></div>
+                                <span className={`text-[10px] font-mono transition-colors ${copiedColor === color ? 'text-green-400 font-bold' : 'text-gray-500 group-hover:text-white'}`}>
+                                    {copiedColor === color ? 'Copiado!' : color}
+                                </span>
+                            </button>
+                        ))}
                      </div>
                  </div>
              </div>

@@ -1,13 +1,12 @@
 
 import React, { useState } from 'react';
-import type { ColoristReport, SimulatedTurnaround } from '../types';
+import type { ColoristReport } from '../types';
 import { Icon } from './Icon';
 import { ZoomableImage } from './ZoomableImage';
 import { generateColoristPdf } from '../utils/pdfGenerator';
-import { TurnaroundView } from './TurnaroundView';
 
 interface ColoristReportDisplayProps {
-  reportData: { report: ColoristReport; tryOnImage: SimulatedTurnaround };
+  reportData: { report: ColoristReport; tryOnImage: string };
   clientImage: string;
   onReset: () => void;
   setIsLoading: (isLoading: boolean) => void;
@@ -49,8 +48,7 @@ export const ColoristReportDisplay: React.FC<ColoristReportDisplayProps> = ({ re
     setLoadingMessage('Gerando PDF do relatório...');
     setShareMessage(null);
     try {
-      // Pass the front image for the PDF, as it's the primary "after" shot
-      const pdfBlob = await generateColoristPdf({ report, tryOnImage: tryOnImage.front }, clientImage);
+      const pdfBlob = await generateColoristPdf(reportData, clientImage);
       const pdfFile = new File([pdfBlob], 'relatorio-colorimetria.pdf', { type: 'application/pdf' });
       
       if (navigator.share && navigator.canShare({ files: [pdfFile] })) {
@@ -107,31 +105,19 @@ export const ColoristReportDisplay: React.FC<ColoristReportDisplayProps> = ({ re
             </div>
             <div className="text-center">
               <h3 className="font-semibold mb-2">Resultado (IA)</h3>
-              <TurnaroundView 
-                  frontImage={tryOnImage.front} 
-                  sideImage={tryOnImage.side} 
-                  backImage={tryOnImage.back} 
-              />
+              <ZoomableImage src={tryOnImage} alt="Cliente - Depois" />
             </div>
           </div>
 
-          <div className="bg-gray-900/50 p-4 rounded-xl space-y-4 border border-emerald-500/20 shadow-lg shadow-emerald-900/10">
-            <h3 className="text-xl font-semibold text-emerald-300 border-b border-gray-700 pb-2 mb-3 flex items-center gap-2">
-                <Icon name="face" className="w-5 h-5" />
-                Análise de Pele & Harmonização
-            </h3>
+          <div className="bg-gray-900/50 p-4 rounded-xl space-y-4 border border-emerald-500/20">
+            <h3 className="text-xl font-semibold text-emerald-300 border-b border-gray-700 pb-2 mb-3">Análise de Pele & Harmonização</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InfoCard icon="color-palette" title="Subtom de Pele Detectado" value={report.visagismAndColorimetryAnalysis.skinTone} />
               <InfoCard icon="filter" title="Contraste Pessoal" value={report.visagismAndColorimetryAnalysis.contrast} />
             </div>
-            <div className="bg-emerald-900/20 p-4 rounded-lg border border-emerald-500/30">
-                <p className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
-                    <Icon name="check" className="w-4 h-4" />
-                    Insight da IA:
-                </p>
-                <p className="text-gray-200 text-sm leading-relaxed italic border-l-2 border-emerald-500 pl-3">
-                    "{report.visagismAndColorimetryAnalysis.recommendation}"
-                </p>
+            <div className="bg-emerald-900/30 p-3 rounded-lg border border-emerald-500/30">
+                <p className="text-sm font-semibold text-emerald-400 mb-1">Recomendação Personalizada:</p>
+                <p className="text-gray-300 italic leading-relaxed text-sm">{report.visagismAndColorimetryAnalysis.recommendation}</p>
             </div>
           </div>
           

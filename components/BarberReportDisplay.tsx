@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import type { BarberReport, SimulatedTurnaround } from '../types';
+import type { BarberReport } from '../types';
 import { Icon } from './Icon';
 import { ZoomableImage } from './ZoomableImage';
 import { generateBarberPdf } from '../utils/pdfGenerator';
-import { TurnaroundView } from './TurnaroundView';
 
 interface BarberReportDisplayProps {
   report: BarberReport;
   clientImage: string;
   referenceImage: string;
-  simulatedImage: SimulatedTurnaround;
+  simulatedImage: string;
   onReset: () => void;
   setIsLoading: (isLoading: boolean) => void;
   setLoadingMessage: (message: string) => void;
@@ -33,7 +32,7 @@ export const BarberReportDisplay: React.FC<BarberReportDisplayProps> = ({
         setLoadingMessage('Gerando dossiê do barbeiro...');
         setShareMessage(null);
         try {
-            const pdfBlob = await generateBarberPdf(report, clientImage, simulatedImage.front);
+            const pdfBlob = await generateBarberPdf(report, clientImage, simulatedImage);
             const pdfFile = new File([pdfBlob], 'dossie-barbeiro.pdf', { type: 'application/pdf' });
             
             if (navigator.share && navigator.canShare({ files: [pdfFile] })) {
@@ -70,7 +69,7 @@ export const BarberReportDisplay: React.FC<BarberReportDisplayProps> = ({
                 <div className="flex items-center gap-2">
                     <button onClick={handleShareOrDownloadPdf} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-500 transition-colors text-sm uppercase">
                         <Icon name="share" className="w-5 h-5" />
-                        Compartilhar / Baixar Dossiê
+                        Baixar Dossiê
                     </button>
                     <button onClick={onReset} className="px-4 py-2 bg-gray-700 text-white rounded-lg font-bold hover:bg-gray-600 transition-colors text-sm uppercase">
                         Nova Análise
@@ -87,12 +86,8 @@ export const BarberReportDisplay: React.FC<BarberReportDisplayProps> = ({
                             <ZoomableImage src={clientImage} alt="Cliente" />
                         </div>
                         <div className="text-center">
-                            <h3 className="font-bold text-blue-400 mb-2 uppercase text-xs tracking-wider">Simulação 3D</h3>
-                             <TurnaroundView
-                                frontImage={simulatedImage.front}
-                                sideImage={simulatedImage.side}
-                                backImage={simulatedImage.back}
-                            />
+                            <h3 className="font-bold text-blue-400 mb-2 uppercase text-xs tracking-wider">Simulação</h3>
+                            <ZoomableImage src={simulatedImage} alt="Simulação" />
                         </div>
                     </div>
 

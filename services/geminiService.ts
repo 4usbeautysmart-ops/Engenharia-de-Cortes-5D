@@ -19,16 +19,8 @@ import { fileToBase64 } from "../utils/fileUtils";
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 
-// This function gets the standard AI client.
-const getAiClient = () => {
-  if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set.");
-  }
-  return new GoogleGenAI({ apiKey: API_KEY });
-};
-
-// This function checks for and prompts the user to select a billing-enabled API key for premium models.
-const getPremiumAiClient = async (): Promise<GoogleGenAI> => {
+// This function checks for and prompts the user to select an API key for Veo.
+const ensureVeoApiKey = async (): Promise<GoogleGenAI> => {
   try {
     if (
       window.aistudio &&
@@ -36,43 +28,25 @@ const getPremiumAiClient = async (): Promise<GoogleGenAI> => {
     ) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
-        // Inform the user why they need to select a key.
-        alert(
-          "Para usar esta funcionalidade avançada (edição de imagem, vídeo ou geração de alta qualidade), você precisa selecionar uma chave de API de um projeto com faturamento ativado. Para mais informações, acesse ai.google.dev/gemini-api/docs/billing"
-        );
         await window.aistudio.openSelectKey();
-        // We proceed assuming the user selected a key. The API call will fail if they closed the dialog.
       }
     }
   } catch (e) {
     console.warn("Could not check for aistudio API key", e);
   }
-
-  // Re-check for the API_KEY after the dialog might have run.
   if (!API_KEY) {
     throw new Error(
-      "API_KEY environment variable not set. Please select a key for premium features."
+      "API_KEY environment variable not set. Please select a key."
     );
   }
-
-  // Return a NEW client instance to ensure it uses the latest key from the environment.
   return new GoogleGenAI({ apiKey: API_KEY });
 };
 
-// Helper function to safely parse JSON response from Gemini
-const safeParseJsonResponse = (text: string): any => {
-  try {
-    // Remove code blocks if present (```json ... ```)
-    let cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
-    // Remove any other markdown code blocks
-    cleanText = cleanText.replace(/```/g, "").trim();
-    return JSON.parse(cleanText);
-  } catch (e) {
-    console.error("JSON Parsing Error. Raw text:", text);
-    throw new Error(
-      "A IA retornou um formato de dados inválido. Por favor, tente novamente."
-    );
+const getAiClient = () => {
+  if (!API_KEY) {
+    throw new Error("API_KEY environment variable not set.");
   }
+  return new GoogleGenAI({ apiKey: API_KEY });
 };
 
 // --- Schemas ---
@@ -206,7 +180,7 @@ const coloristReportSchema = {
         recommendation: {
           type: Type.STRING,
           description:
-            "Explicação detalhada de como a cor sugerida foi ajustada para harmonizar com o tom de pele da cliente.",
+            "Explicação de como a cor escolhida harmoniza com o tom de pele identificado.",
         },
       },
       required: ["skinTone", "contrast", "recommendation"],
@@ -384,35 +358,16 @@ const barberReportSchema = {
 
 const visagism360ReportSchema = {
   type: Type.OBJECT,
-  description:
-    "A comprehensive visagism report with color palette in hex codes.",
   properties: {
     faceShape: { type: Type.STRING },
-    analysis: {
-      type: Type.STRING,
-      description:
-        "Análise psicológica profunda conectando as linhas faciais a um arquétipo de personalidade.",
-    },
-    physicalFeatures: {
-      type: Type.STRING,
-      description:
-        "Descrição objetiva das características e proporções faciais.",
-    },
+    analysis: { type: Type.STRING },
+    physicalFeatures: { type: Type.STRING },
     colorimetry: {
       type: Type.OBJECT,
       properties: {
         season: { type: Type.STRING },
         characteristics: { type: Type.STRING },
-        bestColors: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.STRING,
-            description:
-              "A valid CSS hexadecimal color code (e.g., '#FFFFFF'). MUST start with '#'. Do NOT use color names.",
-          },
-          description:
-            "A list of 6 to 8 colors in strictly HEX format (e.g. #RRGGBB).",
-        },
+        bestColors: { type: Type.ARRAY, items: { type: Type.STRING } },
       },
       required: ["season", "characteristics", "bestColors"],
     },
@@ -425,41 +380,14 @@ const visagism360ReportSchema = {
           description: { type: Type.STRING },
           technicalDetails: { type: Type.STRING },
           stylingTips: { type: Type.STRING },
-          harmonyPoints: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Lista de pontos que o corte valoriza e harmoniza.",
-          },
-          tensionPoints: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description:
-              "Lista de pontos de atenção na execução para não criar um efeito indesejado.",
-          },
-          diagrams: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                svg: {
-                  type: Type.STRING,
-                  description:
-                    "SVG técnico de alta qualidade. Estilo high-tech: Fundo transparente, linhas em cores neon (ciano, magenta), interativo com IDs de passo se aplicável.",
-                },
-              },
-              required: ["title", "svg"],
-            },
-          },
+          reason: { type: Type.STRING },
         },
         required: [
           "name",
           "description",
           "technicalDetails",
           "stylingTips",
-          "harmonyPoints",
-          "tensionPoints",
-          "diagrams",
+          "reason",
         ],
       },
     },
@@ -582,6 +510,14 @@ export async function generateTurnaroundImages(
   const views = ["Front View", "Side View (Profile)", "Back View"];
   const promises = views.map(async (view) => {
     const prompt = `Generate a photorealistic image of a ${gender} with this hairstyle: "${description}". View: ${view}. Professional studio lighting, neutral background, 8k resolution. Ensure consistent hair color and texture across views.`;
+
+    // This is a simulation of generating distinct images. In a real scenario, consistent character generation is hard.
+    // We use text-to-image here.
+    // NOTE: The previous `generateRealisticImage` used imagen-3.0. We should stick to one method.
+    // Since we don't have direct access to 'generateImages' for all models easily in this snippet context without more setup,
+    // we will use the editImage flow or text-to-image if available.
+    // For simplicity in this "mock" logic, we might reuse existing image generation or just return placeholders if no API key for image gen.
+    // Assuming `generateRealisticImage` works:
     return await generateRealisticImage(prompt);
   });
 
@@ -615,7 +551,7 @@ export async function analyzeHaircutImage(
     },
   });
 
-  return safeParseJsonResponse(response.text.trim()) as CuttingPlan;
+  return JSON.parse(response.text.trim()) as CuttingPlan;
 }
 
 export async function conductVisagismAnalysis(
@@ -640,7 +576,7 @@ export async function conductVisagismAnalysis(
     },
   });
 
-  return safeParseJsonResponse(response.text.trim()) as VisagismReport;
+  return JSON.parse(response.text.trim()) as VisagismReport;
 }
 
 export async function generateHairstylistReport(
@@ -668,21 +604,12 @@ export async function generateHairstylistReport(
   }
 
   const reportPrompt = {
-    text: `Mestre Hairstylist Visagista. Analise a cliente e a referência.
+    text: `Mestre Hairstylist. Analise a cliente e a referência.
     ${styleInputPrompt}
-    Gere um relatório JSON completo:
-    
-    1. Viabilidade: Veredito e justificativa.
-    2. Plano de Corte Técnico Detalhado:
-       - Gere diagramas SVG no estilo **High-Tech/Futurista**.
-       - **CRUCIAL - INTERATIVIDADE:** Agrupe TODOS os elementos visuais de cada passo (linhas, setas, textos) dentro de tags <g id="step-X"> (onde X é o número do passo).
-       - **ESTÉTICA:**
-         - Fundo: Transparente.
-         - Linhas de Corte: Neon Magenta (#FF00FF) ou Cyan (#00FFFF), espessura 2px.
-         - Linhas de Guia/Divisão: Tracejadas, Cinza Claro ou Branco, espessura 1px.
-         - Ângulos: Indique ângulos de projeção (0°, 45°, 90°) com arcos e texto pequeno.
-         - Setas: Indique direção de distribuição.
-       - O SVG deve ser limpo, profissional e técnico.
+    Gere um relatório JSON:
+    1. Viabilidade.
+    2. Plano de Corte Técnico (SVG High-Tech: Cores Neon, Fundo Escuro, Interativo).
+    **IMPORTANTE:** Nos diagramas SVG, agrupe as linhas correspondentes a cada passo usando <g id="step-1">, <g id="step-2">, etc., para que eu possa destacá-las interativamente no app. Use cores vibrantes (Ciano, Magenta, Verde Neon) sobre fundo transparente.
     3. Home Care (Marca: ${brand}).`,
   };
 
@@ -706,10 +633,13 @@ export async function generateHairstylistReport(
     }
     if (!description) description = "modern haircut";
 
+    // Improved Flow: Edit the client photo for the "Front" view.
     const clientDataUrl = `data:${clientImageFile.type};base64,${clientBase64}`;
-    const prompt = `Change hair to: ${description}. ADAPT and HARMONIZE the hairstyle to the client's face shape and proportions. Ensure a flattering, realistic look that respects facial features. Professional Visagism result.`;
+    const frontImage = await editImageWithText(
+      clientDataUrl,
+      `Change hair to: ${description}. Keep face.`
+    );
 
-    const frontImage = await editImageWithText(clientDataUrl, prompt);
     const sideImage = await generateRealisticImage(
       `Side profile view of a woman with this hairstyle: ${description}. Professional photography.`
     );
@@ -725,9 +655,7 @@ export async function generateHairstylistReport(
     simulationPromise,
   ]);
   return {
-    report: safeParseJsonResponse(
-      reportResponse.text.trim()
-    ) as HairstylistReport,
+    report: JSON.parse(reportResponse.text.trim()) as HairstylistReport,
     simulatedImage: simulatedImages,
   };
 }
@@ -750,21 +678,10 @@ export async function generateBarberReport(
     });
   }
 
-  let promptText = `Atue como um Barbeiro Visagista Expert. Analise o cliente na imagem.
-  **IDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR).**`;
+  let promptText = `Barbeiro Visagista Expert. Analise o cliente.`;
+  if (styleDescription) promptText += ` Desejo: "${styleDescription}".`;
 
-  if (styleDescription)
-    promptText += `\n\nDesejo do Cliente: "${styleDescription}".`;
-
-  promptText += `\n\nGere um relatório JSON completo contendo:
-  1. Análise Facial: Formato do rosto e características marcantes.
-  2. Corte Sugerido: Nome técnico, descrição e passo a passo detalhado (use termos como degradê, low fade, tesoura, etc).
-  3. Diagramas: SVG Técnico High-Tech (Cores Neon em fundo transparente/escuro) ilustrando as divisões ou ângulos.
-  4. Barba: Recomendação de estilo que harmonize com o rosto e dicas de manutenção.
-  5. Finalização: Produtos e dicas de styling.
-  
-  Retorne APENAS o JSON.`;
-
+  promptText += ` Gere JSON: Análise Facial, Corte (SVG High-Tech), Barba, Produtos.`;
   parts.push({ text: promptText });
 
   const reportPromise = ai.models.generateContent({
@@ -803,7 +720,7 @@ export async function generateBarberReport(
     simulationPromise,
   ]);
   return {
-    report: safeParseJsonResponse(reportResponse.text.trim()) as BarberReport,
+    report: JSON.parse(reportResponse.text.trim()) as BarberReport,
     simulatedImage: simulatedImages,
   };
 }
@@ -816,30 +733,11 @@ export async function generateVisagism360Report(
   const imagePart = {
     inlineData: { mimeType: imageFile.type, data: base64Image },
   };
-
   const textPart = {
-    text: `Atue como um Mestre Visagista e Psicólogo da Imagem. Analise a imagem. Gere um relatório profundo de Visagismo 360 em **Português do Brasil (pt-BR)**.
-
-    **REQUISITOS DA ANÁLISE FACIAL:**
-    1.  **Análise Psicológica Detalhada:** No campo 'analysis', explique o que as principais linhas faciais (maxilar, sobrancelhas, formato dos olhos e boca) comunicam. Conecte essa análise a um arquétipo de personalidade (ex: Criativa, Sofisticada, Poderosa).
-    2.  **Características Físicas:** Descreva as proporções e traços marcantes no campo 'physicalFeatures'.
-
-    **REQUISITOS DA COLORIMETRIA:**
-    - Gere o campo 'bestColors' contendo EXATAMENTE uma lista de strings.
-    - Cada string DEVE ser um código hexadecimal de cor válido (ex: "#FF5733", "#AABBCC").
-    - NÃO inclua nomes de cores, apenas os códigos HEX.
-
-    **REQUISITOS DAS SUGESTÕES DE ESTILO:**
-    1.  **Para CADA UM dos 3 estilos**, forneça:
-        - **Pontos de Harmonia:** Uma lista explicando o que o corte valoriza e equilibra no rosto da cliente.
-        - **Pontos de Tensão:** Uma lista de alertas sobre o que precisa de atenção na execução para não criar um efeito indesejado.
-        - **Diagramas SVG Técnicos:** Como já especificado.
-
-    Responda APENAS com o JSON formatado conforme o schema.`,
+    text: `Visagismo 360 Completo. JSON: Face (Psicologia), Colorimetria (Hex), 3 Cortes Detalhados.`,
   };
 
-  // 1. Get the main text/SVG report
-  const reportPromise = ai.models.generateContent({
+  const response = await ai.models.generateContent({
     model: "gemini-2.5-pro",
     contents: { parts: [imagePart, textPart] },
     config: {
@@ -849,50 +747,7 @@ export async function generateVisagism360Report(
     },
   });
 
-  const reportResponse = await reportPromise;
-
-  // Defensive parsing
-  let report: Visagism360Report;
-  try {
-    report = safeParseJsonResponse(
-      reportResponse.text.trim()
-    ) as Visagism360Report;
-  } catch (e) {
-    console.error(
-      "Failed to parse Visagism 360 report JSON:",
-      reportResponse.text
-    );
-    throw new Error(
-      "A IA retornou um formato de relatório inválido. Tente novamente."
-    );
-  }
-
-  // 2. Generate simulated images for each style in parallel
-  const clientDataUrl = `data:${imageFile.type};base64,${base64Image}`;
-
-  const imageGenerationPromises = report.styles.map((style) => {
-    const editPrompt = `Apply this specific hairstyle to the person in the photo: "${style.name}". Key characteristics: ${style.description}. Maintain the person's facial identity, features, and the original photo's lighting and background as much as possible. The result must be photorealistic and seamlessly blended.`;
-    return editImageWithText(clientDataUrl, editPrompt);
-  });
-
-  // Use Promise.allSettled to ensure that even if one image fails, the others can still be returned.
-  const imageResults = await Promise.allSettled(imageGenerationPromises);
-
-  // 3. Attach the generated images back to the report object
-  report.styles.forEach((style, index) => {
-    const result = imageResults[index];
-    if (result.status === "fulfilled") {
-      style.simulatedImage = result.value;
-    } else {
-      console.warn(
-        `Failed to generate simulated image for style "${style.name}":`,
-        result.reason
-      );
-      style.simulatedImage = undefined; // Explicitly set to undefined on failure
-    }
-  });
-
-  return report;
+  return JSON.parse(response.text.trim()) as Visagism360Report;
 }
 
 export async function generateHairTherapyReport(
@@ -958,7 +813,7 @@ export async function generateHairTherapyReport(
   ]);
 
   // Inject the user description back into the report object so it can be used in the PDF
-  const resultReport = safeParseJsonResponse(
+  const resultReport = JSON.parse(
     reportResponse.text.trim()
   ) as HairTherapyReport;
   if (description) {
@@ -974,7 +829,7 @@ export async function generateHairTherapyReport(
 // --- Helper Generative Functions ---
 
 export async function generateRealisticImage(prompt: string): Promise<string> {
-  const ai = await getPremiumAiClient();
+  const ai = getAiClient();
   const response = await ai.models.generateImages({
     model: "imagen-4.0-generate-001", // Or 'gemini-3-pro-image-preview' if available/preferred
     prompt: `${prompt}, 8k, photorealistic, professional studio lighting`,
@@ -991,49 +846,28 @@ export async function editImageWithText(
   base64Image: string,
   prompt: string
 ): Promise<string> {
-  const ai = await getPremiumAiClient();
+  const ai = getAiClient();
   const imageData = base64Image.split(",")[1];
   const mimeType = base64Image.match(/data:(.*);base64,/)?.[1] || "image/jpeg";
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
-      contents: {
-        parts: [
-          { inlineData: { data: imageData, mimeType: mimeType } },
-          {
-            text: `Edit instructions: ${prompt}. Maintain facial identity and background.`,
-          },
-        ],
-      },
-    });
+  // Using gemini-3-pro-image-preview for high fidelity edits
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-image-preview",
+    contents: {
+      parts: [
+        { inlineData: { data: imageData, mimeType: mimeType } },
+        {
+          text: `Edit instructions: ${prompt}. Maintain facial identity and background.`,
+        },
+      ],
+    },
+    config: { responseModalities: [Modality.IMAGE] },
+  });
 
-    // Robust check for generated image data
-    const imagePart = response.candidates?.[0]?.content?.parts?.find(
-      (p) => p.inlineData
-    );
-    if (imagePart && imagePart.inlineData) {
-      return `data:image/png;base64,${imagePart.inlineData.data}`;
-    }
-
-    // Check for safety ratings or other reasons for failure
-    const finishReason = response.candidates?.[0]?.finishReason;
-    if (finishReason !== "STOP") {
-      console.warn(
-        `Image generation stopped for reason: ${finishReason}. It may be due to safety policies.`
-      );
-      // Return the original image as a fallback
-      return base64Image;
-    }
-
-    throw new Error(
-      "Image generation completed but no image data was returned."
-    );
-  } catch (error) {
-    console.error("Error during image editing:", error);
-    // On any error (API call failure, etc.), return the original image as a safe fallback
-    return base64Image;
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
   }
+  throw new Error("Failed to edit image.");
 }
 
 export async function getHairDescriptionFromImage(
@@ -1135,7 +969,7 @@ export async function generateColoristReport(
     simulationPromise,
   ]);
   return {
-    report: safeParseJsonResponse(reportResponse.text.trim()) as ColoristReport,
+    report: JSON.parse(reportResponse.text.trim()) as ColoristReport,
     tryOnImage: simulatedImages,
   };
 }
@@ -1152,7 +986,7 @@ export async function generateVideoFromImage(
   imageFile: File,
   prompt: string
 ): Promise<string> {
-  const ai = await getPremiumAiClient();
+  const ai = await ensureVeoApiKey();
   const base64Image = await fileToBase64(imageFile);
   let operation = await ai.models.generateVideos({
     model: "veo-3.1-fast-generate-preview",
@@ -1170,7 +1004,7 @@ export async function generateVideoFromImage(
 }
 
 export async function textToSpeech(text: string): Promise<void> {
-  const ai = await getPremiumAiClient();
+  const ai = getAiClient();
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: { parts: [{ text }] },
